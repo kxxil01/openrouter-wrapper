@@ -158,6 +158,11 @@ export class ClaudeOpus {
    * @returns {Promise<Object>} The aggregated completion response
    */
   async streamCompletion(requestParams, onProgress, requestId) {
+    // Ensure the model ID is set
+    if (!requestParams.model) {
+      requestParams.model = this.modelId;
+    }
+    
     console.log(`[${requestId}] Starting streaming completion request to ${this.client.defaults.baseURL}/chat/completions`);
     console.log(`[${requestId}] Using model: ${requestParams.model}`);
     console.log(`[${requestId}] API key: ${this.apiKey ? `${this.apiKey.substring(0, 10)}...` : 'undefined'}`);

@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
+import { v4 as uuidv4 } from 'uuid';
 
 // Load environment variables
 dotenv.config();
@@ -265,10 +266,13 @@ app.post('/api/chat/stream', async (req, res) => {
     // Prepare request parameters
     const requestParams = {
       messages: messages,
+      model: process.env.DEFAULT_MODEL_ID || 'anthropic/claude-3-opus-20240229',
       stream: true,
       temperature: 0.7,
       max_tokens: 4000
     };
+    
+    console.log('Using model:', requestParams.model);
     
     // Add system prompt if not already present
     if (!messages.some(msg => msg.role === 'system')) {
