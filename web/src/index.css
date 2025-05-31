@@ -1,0 +1,63 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    @apply h-full;
+  }
+  body {
+    @apply h-full;
+  }
+  #root {
+    @apply h-full;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply px-4 py-2 rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2;
+  }
+  
+  .btn-primary {
+    @apply bg-claude-primary text-white hover:bg-claude-dark focus:ring-claude-primary;
+  }
+  
+  .btn-secondary {
+    @apply bg-white text-claude-primary border border-claude-primary hover:bg-claude-light focus:ring-claude-primary;
+  }
+  
+  .input {
+    @apply block w-full rounded-md border-gray-300 shadow-sm focus:border-claude-primary focus:ring-claude-primary;
+  }
+  
+  .chat-message {
+    @apply p-4 rounded-lg mb-4 max-w-3xl;
+  }
+  
+  .user-message {
+    @apply bg-gray-100 ml-auto;
+  }
+  
+  .assistant-message {
+    @apply bg-claude-light mr-auto;
+  }
+  
+  .code-block {
+    @apply bg-gray-800 text-gray-100 p-4 rounded-md my-2 overflow-x-auto;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-gray-100;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-300 rounded-full hover:bg-gray-400;
+}
