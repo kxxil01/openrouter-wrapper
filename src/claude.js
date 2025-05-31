@@ -210,55 +210,87 @@ export class ClaudeOpus {
           let buffer = '';
           
           response.data.on('data', (chunk) => {
-            buffer += chunk.toString();
-            
-            // Process complete SSE messages
-            const lines = buffer.split('\n\n');
-            buffer = lines.pop(); // Keep the last incomplete chunk
-            
-            for (const line of lines) {
-              if (line.startsWith('data: ')) {
-                const data = line.slice(6);
-                
-                if (data === '[DONE]') {
-                  console.log(`[${requestId}] Stream completed`);
-                  return;
-                }
-                
-                try {
-                  const parsedData = JSON.parse(data);
+            try {
+              buffer += chunk.toString();
+              
+              // Process complete SSE messages
+              const lines = buffer.split('\n\n');
+              buffer = lines.pop(); // Keep the last incomplete chunk
+              
+              for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                  const data = line.slice(6);
                   
-                  // Update aggregated response
-                  if (!aggregatedResponse.id && parsedData.id) {
-                    aggregatedResponse.id = parsedData.id;
+                  if (data === '[DONE]') {
+                    console.log(`[${requestId}] Stream completed`);
+                    return;
                   }
                   
-                  if (parsedData.model) {
-                    aggregatedResponse.model = parsedData.model;
+                  try {
+                    // Log the raw data for debugging
+                    console.log(`[${requestId}] Raw stream data:`, data.substring(0, 100) + (data.length > 100 ? '...' : ''));
+                    
+                    const parsedData = JSON.parse(data);
+                    
+                    // Update aggregated response
+                    if (!aggregatedResponse.id && parsedData.id) {
+                      aggregatedResponse.id = parsedData.id;
+                    }
+                    
+                    if (parsedData.model) {
+                      aggregatedResponse.model = parsedData.model;
+                    }
+                    
+                    // Extract the content - handle both delta and direct content formats
+                    let newContent = '';
+                    
+                    if (parsedData.choices && parsedData.choices[0]) {
+                      if (parsedData.choices[0].delta && parsedData.choices[0].delta.content) {
+                        // OpenAI-style delta format
+                        newContent = parsedData.choices[0].delta.content;
+                      } else if (parsedData.choices[0].message && parsedData.choices[0].message.content) {
+                        // Direct content format
+                        newContent = parsedData.choices[0].message.content;
+                      } else if (parsedData.choices[0].text) {
+                        // Some APIs use 'text' directly
+                        newContent = parsedData.choices[0].text;
+                      }
+                    }
+                    
+                    if (newContent) {
+                      console.log(`[${requestId}] Received content chunk:`, newContent.substring(0, 20) + (newContent.length > 20 ? '...' : ''));
+                      aggregatedResponse.choices[0].message.content += newContent;
+                    } else {
+                      console.log(`[${requestId}] No content found in chunk:`, JSON.stringify(parsedData).substring(0, 100));
+                    }
+                    
+                    // Update finish reason if present
+                    if (parsedData.choices && parsedData.choices[0] && parsedData.choices[0].finish_reason) {
+                      aggregatedResponse.choices[0].finish_reason = parsedData.choices[0].finish_reason;
+                    }
+                    
+                    // Update token usage if available
+                    if (parsedData.usage) {
+                      aggregatedResponse.usage = parsedData.usage;
+                    }
+                    
+                    // Create a standardized format for the callback
+                    const callbackData = {
+                      choices: [{
+                        delta: { content: newContent },
+                        index: 0
+                      }]
+                    };
+                    
+                    // Call progress callback
+                    onProgress(callbackData, aggregatedResponse);
+                  } catch (error) {
+                    console.error(`[${requestId}] Error parsing stream data:`, error, '\nRaw data:', data);
                   }
-                  
-                  // Extract the delta content
-                  const delta = parsedData.choices[0]?.delta;
-                  if (delta?.content) {
-                    aggregatedResponse.choices[0].message.content += delta.content;
-                  }
-                  
-                  // Update finish reason if present
-                  if (parsedData.choices[0]?.finish_reason) {
-                    aggregatedResponse.choices[0].finish_reason = parsedData.choices[0].finish_reason;
-                  }
-                  
-                  // Update token usage if available
-                  if (parsedData.usage) {
-                    aggregatedResponse.usage = parsedData.usage;
-                  }
-                  
-                  // Call progress callback
-                  onProgress(parsedData, aggregatedResponse);
-                } catch (error) {
-                  console.error(`[${requestId}] Error parsing stream data:`, error);
                 }
               }
+            } catch (chunkError) {
+              console.error(`[${requestId}] Error processing chunk:`, chunkError);
             }
           });
           

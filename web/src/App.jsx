@@ -82,6 +82,7 @@ function App() {
     setError(null);
     
     let eventSource = null;
+    let streamContent = '';
     
     try {
       // First send the message data - IMPORTANT: Do this BEFORE creating the EventSource
@@ -100,59 +101,101 @@ function App() {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
+      console.log('POST request successful, establishing SSE connection...');
+      
       // Now create the EventSource to receive the streaming response
       eventSource = new EventSource(`/api/chat/stream?${new URLSearchParams({
         timestamp: Date.now(), // Prevent caching
         requestId: userMessage.timestamp // Link this stream to the specific request
       })}`);
       
-      let streamContent = '';
+      // Function to update the streaming message content
+      const updateStreamingMessage = (content) => {
+        setConversations(conversations.map(c => 
+          c.id === activeConversation 
+            ? { 
+                ...c, 
+                messages: c.messages.map(msg => 
+                  msg.isStreaming 
+                    ? { ...msg, content }
+                    : msg
+                )
+              } 
+            : c
+        ));
+      };
       
-      // Handle incoming events
-      eventSource.onmessage = (event) => {
-        const data = JSON.parse(event.data);
+      // Function to finalize the streaming message
+      const finishStreaming = () => {
+        setConversations(conversations.map(c => 
+          c.id === activeConversation 
+            ? { 
+                ...c, 
+                messages: c.messages.map(msg => 
+                  msg.isStreaming 
+                    ? { ...msg, content: streamContent, isStreaming: false }
+                    : msg
+                )
+              } 
+            : c
+        ));
         
-        if (data.type === 'content') {
-          // Append new content
-          streamContent += data.content;
+        if (eventSource) {
+          eventSource.close();
+        }
+        setIsLoading(false);
+      };
+      
+      // Handle incoming message events
+      eventSource.onmessage = (event) => {
+        try {
+          console.log('Received SSE event:', event.data.substring(0, 100));
+          const data = JSON.parse(event.data);
+          
+          // Handle different response formats
+          if (data.type === 'content') {
+            // Standard format from our server
+            streamContent += data.content;
+          } else if (data.choices && data.choices[0]) {
+            if (data.choices[0].delta && data.choices[0].delta.content) {
+              // OpenAI-style delta format
+              streamContent += data.choices[0].delta.content;
+            } else if (data.choices[0].message && data.choices[0].message.content) {
+              // Direct content format
+              streamContent += data.choices[0].message.content;
+            } else if (data.choices[0].text) {
+              // Some APIs use 'text' directly
+              streamContent += data.choices[0].text;
+            }
+          } else if (data.content) {
+            // Direct content format
+            streamContent += data.content;
+          } else if (typeof data === 'string') {
+            // Plain string content
+            streamContent += data;
+          } else if (data.type === 'finish' || data.type === 'done') {
+            // Streaming is complete
+            finishStreaming();
+            return;
+          } else if (data.type === 'error') {
+            setError(data.details || 'An error occurred during streaming');
+            eventSource.close();
+            setIsLoading(false);
+            return;
+          }
           
           // Update the assistant message with the new content
-          setConversations(conversations.map(c => 
-            c.id === activeConversation 
-              ? { 
-                  ...c, 
-                  messages: c.messages.map((msg, i) => 
-                    msg.isStreaming 
-                      ? { ...msg, content: streamContent }
-                      : msg
-                  )
-                } 
-              : c
-          ));
-        } else if (data.type === 'finish' || data.type === 'done') {
-          // Streaming is complete, finalize the message
-          setConversations(conversations.map(c => 
-            c.id === activeConversation 
-              ? { 
-                  ...c, 
-                  messages: c.messages.map((msg, i) => 
-                    msg.isStreaming 
-                      ? { ...msg, content: streamContent, isStreaming: false }
-                      : msg
-                  )
-                } 
-              : c
-          ));
-          
-          // Close the connection
-          eventSource.close();
-          setIsLoading(false);
-        } else if (data.type === 'error') {
-          setError(data.details || 'An error occurred during streaming');
-          eventSource.close();
-          setIsLoading(false);
+          updateStreamingMessage(streamContent);
+        } catch (error) {
+          console.error('Error processing SSE message:', error, '\nRaw data:', event.data);
         }
       };
+      
+      // Handle completion event
+      eventSource.addEventListener('done', () => {
+        console.log('Received done event');
+        finishStreaming();
+      });
       
       // Handle errors
       eventSource.onerror = (error) => {
