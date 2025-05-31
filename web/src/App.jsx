@@ -1,6 +1,8 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import ChatInterface from './components/ChatInterface';
 import Sidebar from './components/Sidebar';
+import * as api from './lib/api';
 
 // Define available Claude models - only stable versions with distinct names
 const CLAUDE_MODELS = [
@@ -10,375 +12,575 @@ const CLAUDE_MODELS = [
 ];
 
 function App() {
-  const [conversations, setConversations] = useState([
-    { id: 'default', name: 'New conversation', messages: [] }
-  ]);
-  const [activeConversation, setActiveConversation] = useState('default');
+  // UI state
+  const [isSidebarOpen, setSidebarOpen] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [selectedModel, setSelectedModel] = useState(CLAUDE_MODELS[0]);
-  const [isSidebarOpen, setSidebarOpen] = useState(false);
   
-  // Get the active conversation object
-  const currentConversation = conversations.find(c => c.id === activeConversation) || conversations[0];
+  // Model selection
+  const [selectedModel, setSelectedModel] = useState(CLAUDE_MODELS[0]);
+  const [availableModels, setAvailableModels] = useState(CLAUDE_MODELS);
+  
+  // Conversation state
+  const [conversations, setConversations] = useState([]);
+  const [currentConversation, setCurrentConversation] = useState(null);
+  
+  // Messages state
+  const [messages, setMessages] = useState([]);
 
-  // Create a new conversation
-  const createNewConversation = () => {
-    const newId = `conv-${Date.now()}`;
-    const newConversation = {
-      id: newId,
-      name: 'New conversation',
-      messages: []
-    };
-    
-    setConversations([...conversations, newConversation]);
-    setActiveConversation(newId);
+  // Fetch available models
+  const fetchModels = async () => {
+    // Models are defined locally for now
+    // In a production app, you might fetch these from an API
+    setAvailableModels(CLAUDE_MODELS);
   };
 
-  // Delete a conversation
-  const deleteConversation = (id) => {
-    const updatedConversations = conversations.filter(c => c.id !== id);
-    
-    // If we're deleting the active conversation, switch to another one
-    if (id === activeConversation && updatedConversations.length > 0) {
-      setActiveConversation(updatedConversations[0].id);
+  // Fetch conversations from backend API
+  const fetchConversations = async () => {
+    try {
+      setIsLoading(true);
+      console.log('Fetching conversations from API...');
+      
+      const data = await api.getConversations();
+      
+      console.log('Fetched conversations:', data);
+      setConversations(data || []);
+      
+      // Set current conversation to the most recent one if none is selected
+      if (!currentConversation && data && data.length > 0) {
+        setCurrentConversation(data[0]);
+      }
+    } catch (error) {
+      console.error('Error fetching conversations:', error);
+      setError('Failed to load conversations: ' + error.message);
+    } finally {
+      setIsLoading(false);
     }
-    
-    setConversations(updatedConversations);
   };
 
-  // Rename a conversation
-  const renameConversation = (id, newName) => {
-    setConversations(conversations.map(c => 
-      c.id === id ? { ...c, name: newName } : c
-    ));
+  // Fetch messages for a conversation from backend API
+  const fetchMessages = async (conversationId) => {
+    try {
+      setIsLoading(true);
+      console.log(`Fetching messages for conversation: ${conversationId}`);
+      
+      const data = await api.getMessagesForConversation(conversationId);
+      console.log(`Received ${data ? data.length : 0} messages for conversation`);
+      
+      setMessages(data || []);
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+      setError('Failed to load messages: ' + (error.message || 'Unknown error'));
+      // Set empty messages array to prevent UI from breaking
+      setMessages([]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  // Add a message to the current conversation
-  const addMessage = (message) => {
-    // Use functional update to ensure we're working with the latest state
-    setConversations(prevConversations => {
-      // Find the current conversation
-      const currentConv = prevConversations.find(c => c.id === activeConversation);
+  // Create a new conversation via backend API
+  const createNewConversation = async (title, modelId) => {
+    try {
+      setIsLoading(true);
       
-      if (!currentConv) return prevConversations;
+      const data = await api.createConversation(title, modelId);
       
-      // Create a new name if this is the first user message
-      const newName = currentConv.messages.length === 0 && message.role === 'user'
-        ? message.content.slice(0, 30) + (message.content.length > 30 ? '...' : '')
-        : currentConv.name;
+      setConversations([data, ...conversations]);
+      setCurrentConversation(data);
+      setMessages([]);
       
-      // Log for debugging
-      console.log(`Adding message: ${message.role} - ${message.content.substring(0, 20)}...`);
-      console.log(`Current messages count: ${currentConv.messages.length}`);
-      
-      // Update the conversation with the new message
-      return prevConversations.map(c => 
-        c.id === activeConversation 
-          ? { 
-              ...c, 
-              messages: [...c.messages, message],
-              name: newName
-            } 
-          : c
-      );
-    });
+      return data;
+    } catch (error) {
+      console.error('Error creating conversation:', error);
+      setError('Failed to create conversation: ' + error.message);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  // Send a message to Claude with streaming response
-  const sendMessage = async (content) => {
-    if (!content.trim()) return;
-    
-    // Create a new user message
-    const userMessage = { 
-      role: 'user', 
-      content, 
-      timestamp: new Date().toISOString() 
-    };
-    addMessage(userMessage);
-    
-    // Create a placeholder for the assistant's response
-    const assistantPlaceholder = { 
-      role: 'assistant', 
-      content: '', 
-      timestamp: new Date().toISOString(),
-      isStreaming: true 
-    };
-    addMessage(assistantPlaceholder);
-    
-    setIsLoading(true);
-    setError(null);
-    
-    let streamContent = '';
-    let lastUpdateTime = Date.now();
-    const updateInterval = 33; // ~30fps for smoother visual updates
-    let animationFrameId = null;
+  // Delete a conversation via backend API
+  const handleDeleteConversation = async (conversationId) => {
+    try {
+      setIsLoading(true);
+      
+      // Delete the conversation (messages will be deleted via CASCADE)
+      await api.deleteConversation(conversationId);
+      
+      // Update local state
+      const updatedConversations = conversations.filter(conv => conv.id !== conversationId);
+      setConversations(updatedConversations);
+      
+      // If the deleted conversation was the current one, select a new one or clear current conversation
+      if (currentConversation && currentConversation.id === conversationId) {
+        if (updatedConversations.length > 0) {
+          setCurrentConversation(updatedConversations[0]);
+        } else {
+          // Explicitly set to null to trigger new conversation creation on next message
+          setCurrentConversation(null);
+          setMessages([]);
+        }
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Error deleting conversation:', error);
+      setError('Failed to delete conversation: ' + error.message);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Save a message via backend API
+  const saveMessageToDb = async (role, content) => {
+    if (!currentConversation) return null;
     
     try {
-      console.log('Setting up streaming connection');
+      const data = await api.saveMessage(currentConversation.id, role, content);
       
-      // Prepare messages for the API request
-      const messagesToSend = [...currentConversation.messages.filter(m => !m.isStreaming), userMessage]
-        .map(({ role, content }) => ({ role, content }));
+      // Update the local messages state
+      setMessages([...messages, data]);
       
-      console.log('Sending streaming request with messages:', messagesToSend.length);
+      return data;
+    } catch (error) {
+      console.error('Error saving message:', error);
+      setError('Failed to save message: ' + error.message);
+      throw error;
+    }
+  };
+
+  // Handle selecting a model
+  const handleModelSelect = (model) => {
+    setSelectedModel(model);
+  };
+
+  // Handle starting a new chat
+  const handleNewChat = () => {
+    setCurrentConversation(null);
+    setMessages([]);
+    setError(null);
+  };
+
+  // Handle selecting an existing conversation
+  const handleSelectConversation = (conversation) => {
+    setCurrentConversation(conversation);
+    setError(null);
+  };
+
+  // Handle sending a message to Claude API via backend
+  const handleSendMessage = async (content) => {
+    if (!content.trim()) return;
+    setError(null);
+    setIsLoading(true);
+    
+    try {
+      // Create a new conversation if none exists
+      let conversationId = currentConversation?.id;
+      let isNewConversation = false;
+      let localMessages = [...messages]; // Create a local copy of messages
       
-      // Use AbortController to be able to cancel the fetch request if needed
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
-      
-      const response = await fetch('/api/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'text/event-stream'
-        },
-        body: JSON.stringify({ 
-          messages: messagesToSend,
-          model: selectedModel.id,
-          stream: true
-        }),
-        signal: controller.signal
-      });
-      
-      // Clear the timeout since we got a response
-      clearTimeout(timeoutId);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status}`);
+      if (!conversationId) {
+        console.log('Creating new conversation...');
+        // Create a new conversation with a default title that will be updated later
+        const newConversation = await api.createConversation('New Conversation', selectedModel.id);
+        conversationId = newConversation.id;
+        isNewConversation = true;
+        
+        console.log('New conversation created:', newConversation);
+        
+        // Update state with the new conversation
+        setCurrentConversation(newConversation);
+        
+        // Ensure the conversation is added to the conversations list
+        setConversations(prevConversations => [newConversation, ...prevConversations]);
+        
+        // Create a user message object
+        const userMessage = { 
+          id: uuidv4(), // Generate a temporary ID
+          role: 'user', 
+          content, 
+          conversation_id: conversationId,
+          created_at: new Date().toISOString()
+        };
+        
+        // Update UI immediately with the user message
+        setMessages([userMessage]);
+        localMessages = [userMessage];
+        
+        // Save user message to database with the new conversation ID
+        console.log('Saving message to new conversation:', conversationId);
+        const savedMessage = await api.saveMessage(conversationId, 'user', content);
+        console.log('Message saved:', savedMessage);
+        
+        // Replace the temporary message with the saved one
+        setMessages([savedMessage]);
+        localMessages = [savedMessage];
+        
+        // Ensure conversations list is refreshed
+        await fetchConversations();
+      } else {
+        // For existing conversations, save message normally
+        const savedMessage = await api.saveMessage(conversationId, 'user', content);
+        localMessages = [...localMessages, savedMessage];
+        setMessages(localMessages);
       }
       
-      if (!response.body) {
-        throw new Error('ReadableStream not supported in this browser');
+      // Format messages for Claude API - use localMessages instead of state messages
+      const apiMessages = localMessages.map(msg => ({
+        role: msg.role,
+        content: msg.content
+      }));
+      
+      // Add the new user message if it's not already in the messages array
+      // (for existing conversations, we've already added it to localMessages)
+      if (!isNewConversation) {
+        apiMessages.push({
+          role: 'user',
+          content
+        });
       }
       
-      console.log('Stream response received, setting up reader');
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder('utf-8');
-      let buffer = '';
-      let pendingUpdate = false;
+      console.log('Sending message to Claude API...');
       
-      // Function to update UI with optimized throttling and frame synchronization
-      const updateUI = (content) => {
-        const now = Date.now();
+      try {
+        // Define responseData at the top level so it's available in all code paths
+        let responseData = null;
         
-        // Cancel any pending animation frame to avoid redundant updates
-        if (animationFrameId) {
-          cancelAnimationFrame(animationFrameId);
-          animationFrameId = null;
-        }
+        // Enable streaming for better user experience
+        const useStreaming = true;
         
-        // Force immediate update if it's been too long since last update
-        const timeSinceLastUpdate = now - lastUpdateTime;
-        const forceUpdate = timeSinceLastUpdate >= 100; // Force update if more than 100ms passed
-        
-        if (forceUpdate || timeSinceLastUpdate >= updateInterval || !pendingUpdate) {
-          pendingUpdate = false;
-          lastUpdateTime = now;
+        if (useStreaming) {
+          // Add a placeholder message for the assistant's response that will be updated
+          const placeholderMessage = { role: 'assistant', content: '', isStreaming: true };
+          setMessages([...localMessages, placeholderMessage]);
           
-          // Use requestAnimationFrame to sync with browser's rendering cycle
-          animationFrameId = requestAnimationFrame(() => {
-            // Use functional state update to ensure we're working with latest state
-            setConversations(prevConversations => {
-              // Find current conversation first
-              const currentConv = prevConversations.find(c => c.id === activeConversation);
-              if (!currentConv) return prevConversations;
+          // Track streamed content outside the callbacks for final processing
+          let streamedContent = '';
+          let streamController = null;
+          let streamError = null;
+          
+          try {
+            // Call the Claude API with streaming enabled and pass the conversation ID
+            // Use the enhanced API with callbacks for better stream handling
+            streamController = await api.sendMessageToClaudeAPI(
+              selectedModel.id, 
+              apiMessages, 
+              true, 
+              conversationId,
+              // onStreamChunk callback
+              (chunkContent) => {
+                if (chunkContent) {
+                  // Accumulate the content
+                  streamedContent += chunkContent;
+                  
+                  // Update the messages array with the new content
+                  setMessages(prevMessages => {
+                    const updatedMessages = [...prevMessages];
+                    const assistantMessageIndex = updatedMessages.findIndex(
+                      msg => msg.role === 'assistant' && msg.isStreaming
+                    );
+                    
+                    if (assistantMessageIndex !== -1) {
+                      updatedMessages[assistantMessageIndex] = {
+                        ...updatedMessages[assistantMessageIndex],
+                        content: streamedContent
+                      };
+                    }
+                    
+                    return updatedMessages;
+                  });
+                }
+              },
+              // onStreamError callback
+              (error) => {
+                // Safely log the error
+                console.error('Stream error:', error ? error : 'Unknown error');
+                streamError = error || new Error('Unknown streaming error');
+                
+                // Get a safe error message
+                const errorMessage = error && typeof error === 'object' ? 
+                  (error.message || 'Failed to stream response from Claude') : 
+                  (typeof error === 'string' ? error : 'Failed to stream response from Claude');
+                
+                // Update the UI with the error
+                setMessages(prevMessages => {
+                  const updatedMessages = [...prevMessages];
+                  const assistantMessageIndex = updatedMessages.findIndex(
+                    msg => msg.role === 'assistant' && msg.isStreaming
+                  );
+                  
+                  if (assistantMessageIndex !== -1) {
+                    updatedMessages[assistantMessageIndex] = {
+                      role: 'system',
+                      content: `Error: ${errorMessage}`,
+                      isError: true
+                    };
+                  }
+                  
+                  return updatedMessages;
+                });
+              },
+              // onStreamComplete callback - now receives the final content from the API client
+              async (finalContent) => {
+                console.log('Stream completed with final content length:', finalContent ? finalContent.length : 0);
+                
+                // Use the finalContent from the API if available, otherwise use our accumulated content
+                const completeContent = finalContent || streamedContent;
+                
+                try {
+                  // For new conversations, we need to refresh the conversation list to get the updated conversation
+                  if (isNewConversation) {
+                    console.log('Refreshing conversations after stream completion for new conversation');
+                    await fetchConversations();
+                    
+                    // Also fetch the messages for this conversation to ensure we have the latest state
+                    const fetchedMessages = await api.getMessagesForConversation(conversationId);
+                    console.log('Fetched messages after stream completion:', fetchedMessages);
+                    
+                    // If we have fetched messages, use them instead of our local state
+                    if (fetchedMessages && fetchedMessages.length > 0) {
+                      setMessages(fetchedMessages);
+                      console.log('Updated messages from database after stream completion');
+                      setIsLoading(false);
+                      return; // Exit early since we've updated messages from the database
+                    }
+                  }
+                  
+                  // Update the final message to remove the streaming flag
+                  setMessages(prevMessages => {
+                    const updatedMessages = [...prevMessages];
+                    const assistantMessageIndex = updatedMessages.findIndex(
+                      msg => msg.role === 'assistant' && msg.isStreaming
+                    );
+                    
+                    if (assistantMessageIndex !== -1) {
+                      // If we got some content, show it as a successful response
+                      if (completeContent && completeContent.trim().length > 0) {
+                        updatedMessages[assistantMessageIndex] = {
+                          role: 'assistant',
+                          content: completeContent,
+                          conversation_id: conversationId,
+                          created_at: new Date().toISOString()
+                        };
+                      } else if (!streamError) {
+                        // If we didn't get any content and there's no error, show a generic error
+                        updatedMessages[assistantMessageIndex] = {
+                          role: 'system',
+                          content: 'Error: Failed to get a complete response from Claude. Please try again.',
+                          isError: true
+                        };
+                      }
+                      // If there was an error, it's already been handled by the onStreamError callback
+                    }
+                    
+                    return updatedMessages;
+                  });
+                  
+                  console.log('UI updated with complete response');
+                } catch (error) {
+                  console.error('Error handling stream completion:', error);
+                  setError('Error handling response: ' + error.message);
+                } finally {
+                  // Always ensure loading state is reset
+                  setIsLoading(false);
+                }
+              }
+            );
+            
+            // Wait for streaming to complete
+            // This is handled by the callbacks, so we don't need to do anything here
+          } catch (streamingError) {
+            // Safely log the error
+            console.error('Error setting up streaming:', streamingError ? streamingError : 'Unknown error');
+            
+            // Get a safe error message
+            const errorMessage = streamingError && typeof streamingError === 'object' ? 
+              (streamingError.message || 'Failed to set up streaming') : 
+              (typeof streamingError === 'string' ? streamingError : 'Failed to set up streaming');
+            
+            // Update the UI with the error
+            setMessages(prevMessages => {
+              const updatedMessages = [...prevMessages];
+              const assistantMessageIndex = updatedMessages.findIndex(
+                msg => msg.role === 'assistant' && msg.isStreaming
+              );
               
-              // Only update if content has actually changed and is not empty
-              const streamingMsg = currentConv.messages.find(msg => msg.isStreaming);
-              if (streamingMsg && streamingMsg.content === content) {
-                return prevConversations; // No change needed
+              if (assistantMessageIndex !== -1) {
+                updatedMessages[assistantMessageIndex] = {
+                  role: 'system',
+                  content: `Error: ${errorMessage}`,
+                  isError: true
+                };
               }
               
-              // Update the conversation with new content
-              return prevConversations.map(c => 
-                c.id === activeConversation 
-                  ? { 
-                      ...c, 
-                      messages: c.messages.map(msg => 
-                        msg.isStreaming 
-                          ? { ...msg, content }
-                          : msg
-                      )
-                    } 
-                  : c
-              );
+              return updatedMessages;
             });
             
-            animationFrameId = null;
-          });
-        } else if (!pendingUpdate) {
-          pendingUpdate = true;
-          setTimeout(() => updateUI(content), Math.min(updateInterval - timeSinceLastUpdate, 50));
-        }
-      };
-      
-      // Process the stream
-      while (true) {
-        const { value, done } = await reader.read();
-        
-        if (done) {
-          console.log('Stream complete');
-          // Finalize the message when the stream is done
-          setConversations(prevConversations => 
-            prevConversations.map(c => 
-              c.id === activeConversation 
-                ? { 
-                    ...c, 
-                    messages: c.messages.map(msg => 
-                      msg.isStreaming 
-                        ? { ...msg, content: streamContent, isStreaming: false }
-                        : msg
-                    )
-                  } 
-                : c
-            )
-          );
-          setIsLoading(false);
-          break;
-        }
-        
-        // Decode the chunk and add to buffer
-        const chunk = decoder.decode(value, { stream: true });
-        buffer += chunk;
-        
-        // Process complete SSE messages
-        const lines = buffer.split('\n\n');
-        buffer = lines.pop() || ''; // Keep the last incomplete chunk in the buffer
-        
-        let contentUpdated = false;
-        
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const dataStr = line.slice(6).trim();
-              if (!dataStr) continue;
-              
-              // Reduce console logging to improve performance
-              if (Math.random() < 0.1) { // Only log ~10% of messages
-                console.log('Received SSE data:', dataStr.substring(0, 50) + (dataStr.length > 50 ? '...' : ''));
-              }
-              
-              const data = JSON.parse(dataStr);
-              
-              // Handle different message types
-              if (data.type === 'content' && data.content) {
-                // Add the new content to our stream
-                streamContent += data.content;
-                contentUpdated = true;
-                
-                // Force immediate UI update for better responsiveness
-                if (streamContent.length % 50 === 0) { // Update every ~50 chars
-                  updateUI(streamContent);
-                }
-              } else if (data.type === 'error') {
-                console.error('Streaming error:', data.details);
-                setError(data.details || 'An error occurred during streaming');
-                reader.cancel();
-                
-                // Update the message to show the error
-                setConversations(prevConversations => 
-                  prevConversations.map(c => 
-                    c.id === activeConversation 
-                      ? { 
-                          ...c, 
-                          messages: c.messages.map(msg => 
-                            msg.isStreaming 
-                              ? { ...msg, content: `Error: ${data.details || 'Something went wrong'}`, isStreaming: false }
-                              : msg
-                          )
-                        } 
-                      : c
-                  )
-                );
-                setIsLoading(false);
-                break;
-              } else if (data.type === 'connected') {
-                console.log('SSE connection established, request ID:', data.requestId);
-              } else if (data.type === 'done') {
-                console.log('SSE stream completed');
-              }
-            } catch (error) {
-              console.error('Error parsing SSE data:', error, '\nRaw line:', line);
+            // Create a safe error to throw
+            const safeError = streamingError || new Error('Unknown streaming error');
+            throw safeError;
+          }
+          
+          // Note: We don't need to save the assistant's response to the database here
+          // because the backend is handling that for us in the onComplete callback
+        } else {
+          try {
+            // Non-streaming fallback
+            console.log('Using non-streaming API call');
+            const responseData = await api.sendMessageToClaudeAPI(selectedModel.id, apiMessages, false, conversationId);
+            
+            if (!responseData || !responseData.choices || !responseData.choices[0] || !responseData.choices[0].message) {
+              console.error('Invalid response format from Claude API:', responseData);
+              throw new Error('Received invalid response format from Claude API');
             }
+            
+            // Save the assistant's response
+            const assistantContent = responseData.choices[0].message.content;
+            
+            // For new conversations, refresh the conversation list to ensure we have the latest state
+            if (isNewConversation) {
+              console.log('Refreshing conversations after non-streaming completion for new conversation');
+              await fetchConversations();
+              
+              // Also fetch the messages for this conversation to ensure we have the latest state
+              const fetchedMessages = await api.getMessagesForConversation(conversationId);
+              console.log('Fetched messages after non-streaming completion:', fetchedMessages);
+              
+              if (fetchedMessages && fetchedMessages.length > 0) {
+                setMessages(fetchedMessages);
+                console.log('Updated messages from database after non-streaming completion');
+              } else {
+                // If we couldn't fetch messages, save the assistant response locally
+                await saveMessageToDb('assistant', assistantContent);
+              }
+            } else {
+              // For existing conversations, just save the message
+              await saveMessageToDb('assistant', assistantContent);
+            }
+          } catch (nonStreamingError) {
+            console.error('Error in non-streaming path:', nonStreamingError);
+            setError('Error getting response: ' + nonStreamingError.message);
+            throw nonStreamingError;
           }
         }
         
-        // Only update UI if content has changed and is not empty
-        if (contentUpdated && streamContent.trim() !== '') {
-          updateUI(streamContent);
+        // Update the conversation title if it's a new conversation
+        if (isNewConversation && conversationId) {
+          const firstMessageContent = content.substring(0, 30) + (content.length > 30 ? '...' : '');
+          
+          try {
+            const updatedConversation = await api.updateConversation(conversationId, { 
+              title: firstMessageContent 
+            });
+            
+            // Update the local state if the update was successful
+            if (updatedConversation) {
+              setCurrentConversation(updatedConversation);
+              setConversations(conversations.map(conv => 
+                conv.id === conversationId ? updatedConversation : conv
+              ));
+            }
+          } catch (titleUpdateError) {
+            console.error('Error updating conversation title:', titleUpdateError);
+            // Continue execution even if title update fails
+          }
         }
+        
+        return responseData;
+      } catch (apiError) {
+        // Safely log the API error with details
+        if (apiError && typeof apiError === 'object') {
+          console.error('Claude API error:', {
+            message: apiError.message || 'Unknown error',
+            code: apiError.code || 'UNKNOWN',
+            status: apiError.status || null,
+            details: apiError.details || null
+          });
+        } else {
+          console.error('Claude API error:', apiError || 'Unknown Claude API error');
+        }
+        
+        // Format a user-friendly error message
+        let errorMessage = 'Failed to get response from Claude';
+        
+        if (apiError.code === 'claude_not_configured') {
+          errorMessage = 'Claude API is not configured. Please check your API key.';
+        } else if (apiError.status === 429) {
+          errorMessage = 'Rate limit exceeded. Please try again later.';
+        } else if (apiError.message) {
+          errorMessage = apiError.message;
+        }
+        
+        setError(errorMessage);
+        
+        // Display the error in the UI instead of saving as a system message
+        // Don't save system messages to the database as they violate the role constraint
+        setMessages(prevMessages => [
+          ...prevMessages,
+          { role: 'system', content: `Error: ${errorMessage}`, isError: true }
+        ]);
+        
+        throw apiError;
       }
     } catch (error) {
-      console.error('Error in streaming request:', error);
-      setError(error.message || 'An error occurred');
+      // Safely log the message handling error with details
+      if (error && typeof error === 'object') {
+        console.error('Error in message handling flow:', {
+          message: error.message || 'Unknown error',
+          code: error.code || 'UNKNOWN',
+          status: error.status || null,
+          stack: error.stack || null
+        });
+      } else {
+        console.error('Error in message handling flow:', error || 'Unknown message handling error');
+      }
+      setError('Error: ' + (error.message || 'Failed to process message'));
+      throw error;
+    } finally {
       setIsLoading(false);
-      
-      // Update the assistant message to indicate the error
-      setConversations(prevConversations => 
-        prevConversations.map(c => 
-          c.id === activeConversation 
-            ? { 
-                ...c, 
-                messages: c.messages.map(msg => 
-                  msg.isStreaming 
-                    ? { ...msg, content: `Error: ${error.message || 'An error occurred'}`, isStreaming: false }
-                    : msg
-                )
-              } 
-            : c
-        )
-      );
     }
   };
+  
+  // Load available models and conversations on component mount
+  useEffect(() => {
+    fetchModels();
+    fetchConversations();
+  }, []);
 
+  // Fetch messages when current conversation changes
+  useEffect(() => {
+    if (currentConversation) {
+      fetchMessages(currentConversation.id);
+    } else {
+      setMessages([]);
+    }
+  }, [currentConversation]);
+  
+  // Render the UI
   return (
-    <div className="flex h-screen bg-[#171717] text-dark-text overflow-hidden">
-      {/* Sidebar */}
-      <Sidebar 
-        conversations={conversations} 
-        activeConversationId={activeConversation} 
-        onSelectConversation={setActiveConversation}
-        onNewConversation={createNewConversation}
-        onDeleteConversation={deleteConversation}
-        onEditConversationTitle={renameConversation}
+    <div className="flex h-full">
+      <Sidebar
+        conversations={conversations}
+        currentConversationId={currentConversation?.id}
+        onSelectConversation={handleSelectConversation}
+        onNewChat={handleNewChat}
+        onDeleteConversation={handleDeleteConversation}
+        isLoading={isLoading}
         isOpen={isSidebarOpen}
         onToggle={() => setSidebarOpen(!isSidebarOpen)}
       />
-      
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col h-full">
-        {/* Hamburger menu when sidebar is collapsed */}
-        {!isSidebarOpen && (
-          <div className="absolute top-3 left-3 z-10">
-            <button 
-              onClick={() => setSidebarOpen(true)}
-              className="p-2 text-dark-muted hover:text-dark-text rounded-md hover:bg-dark-hover transition-colors"
-              aria-label="Open sidebar"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-            </button>
-          </div>
-        )}
-        
-        {/* Centered container */}
-        <div className="flex-1 flex justify-center">
-          <div className={`${!isSidebarOpen ? 'max-w-3xl mx-auto px-4' : 'w-full'}`} style={{ width: !isSidebarOpen ? '100%' : 'auto' }}>
-            <ChatInterface 
-              messages={currentConversation.messages}
-              onSendMessage={sendMessage}
-              isLoading={isLoading}
-              error={error}
-              models={CLAUDE_MODELS}
-              selectedModel={selectedModel}
-              onModelChange={setSelectedModel}
-              isSidebarOpen={isSidebarOpen}
-            />
-          </div>
-        </div>
-      </div>
+      <ChatInterface
+        messages={messages}
+        onSendMessage={handleSendMessage}
+        isLoading={isLoading}
+        error={error}
+        isSidebarOpen={isSidebarOpen}
+        onToggleSidebar={() => setSidebarOpen(!isSidebarOpen)}
+        selectedModel={selectedModel}
+        availableModels={availableModels}
+        onModelSelect={handleModelSelect}
+      />
     </div>
   );
 }

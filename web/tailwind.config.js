@@ -21,10 +21,20 @@ export default {
           950: '#082f49',
         },
         claude: {
-          primary: '#4F00C4',
-          secondary: '#8C52FF',
+          primary: '#8C52FF',
+          secondary: '#B17DFF',
           light: '#E9DEFF',
           dark: '#2E0070',
+        },
+        dark: {
+          primary: '#121212',
+          secondary: '#1E1E1E',
+          tertiary: '#2D2D2D',
+          accent: '#8C52FF',
+          text: '#E0E0E0',
+          muted: '#A0A0A0',
+          border: '#3D3D3D',
+          hover: '#3A3A3A',
         },
       },
       fontFamily: {
