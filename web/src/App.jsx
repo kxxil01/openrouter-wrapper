@@ -81,14 +81,11 @@ function App() {
     setIsLoading(true);
     setError(null);
     
+    let eventSource = null;
+    
     try {
-      // Use the streaming endpoint
-      const eventSource = new EventSource(`/api/chat/stream?${new URLSearchParams({
-        timestamp: Date.now() // Prevent caching
-      })}`);
-      
-      // Send the message data
-      fetch('/api/chat/stream', {
+      // First send the message data - IMPORTANT: Do this BEFORE creating the EventSource
+      const response = await fetch('/api/chat/stream', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -98,6 +95,16 @@ function App() {
             .map(({ role, content }) => ({ role, content })),
         }),
       });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      // Now create the EventSource to receive the streaming response
+      eventSource = new EventSource(`/api/chat/stream?${new URLSearchParams({
+        timestamp: Date.now(), // Prevent caching
+        requestId: userMessage.timestamp // Link this stream to the specific request
+      })}`);
       
       let streamContent = '';
       
@@ -151,13 +158,46 @@ function App() {
       eventSource.onerror = (error) => {
         console.error('EventSource error:', error);
         setError('Connection error. Please try again.');
-        eventSource.close();
+        if (eventSource) {
+          eventSource.close();
+        }
         setIsLoading(false);
+        
+        // Update the assistant message to indicate the error
+        setConversations(conversations.map(c => 
+          c.id === activeConversation 
+            ? { 
+                ...c, 
+                messages: c.messages.map((msg) => 
+                  msg.isStreaming 
+                    ? { ...msg, content: 'Error: Connection lost. Please try again.', isStreaming: false }
+                    : msg
+                )
+              } 
+            : c
+        ));
       };
     } catch (err) {
       console.error('Error sending message:', err);
-      setError('Failed to communicate with Claude. Please try again.');
+      setError(`Failed to communicate with Claude: ${err.message}`);
+      if (eventSource) {
+        eventSource.close();
+      }
       setIsLoading(false);
+      
+      // Update the assistant message to indicate the error
+      setConversations(conversations.map(c => 
+        c.id === activeConversation 
+          ? { 
+              ...c, 
+              messages: c.messages.map((msg) => 
+                msg.isStreaming 
+                  ? { ...msg, content: `Error: ${err.message}`, isStreaming: false }
+                  : msg
+              )
+            } 
+          : c
+      ));
     }
   };
 

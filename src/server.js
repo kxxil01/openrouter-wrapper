@@ -216,71 +216,137 @@ app.post('/api/chat', async (req, res) => {
 
 // API endpoint for streaming chat completions
 app.post('/api/chat/stream', async (req, res) => {
+  console.log('Received streaming chat request');
+  
   // Set headers for SSE
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no'); // Disable Nginx buffering
+  res.setHeader('Access-Control-Allow-Origin', '*'); // Allow CORS
+  
+  // Flush headers to establish SSE connection
+  res.flushHeaders();
+  
+  const { messages } = req.body;
+  
+  if (!messages || !Array.isArray(messages)) {
+    console.error('Invalid request: messages array is required');
+    res.write(`data: ${JSON.stringify({ type: 'error', details: 'Invalid request: messages array is required' })}\n\n`);
+    res.end();
+    return;
+  }
+  
+  console.log(`Processing streaming request with ${messages.length} messages`);
+  
+  // Send an initial connection acknowledgment
+  res.write(`data: ${JSON.stringify({ type: 'connected' })}\n\n`);
   
   try {
-    const { messages, temperature, max_tokens } = req.body;
+    // Create a unique request ID for tracing
+    const requestId = req.query.requestId || uuidv4();
+    console.log(`Request ID: ${requestId}`);
     
-    if (!messages || !Array.isArray(messages) || messages.length === 0) {
-      res.write(`data: ${JSON.stringify({ error: 'Messages array is required' })}\n\n`);
+    // Check if API key exists
+    if (!process.env.OPENROUTER_API_KEY) {
+      console.error('API key is missing');
+      res.write(`data: ${JSON.stringify({ type: 'error', details: 'API key is missing' })}\n\n`);
       res.end();
       return;
     }
     
-    console.log(`Received streaming chat request with ${messages.length} messages`);
-    console.log('Using API key:', claude.apiKey ? `${claude.apiKey.substring(0, 10)}...` : 'undefined');
-    console.log('Using model:', claude.modelId);
-    
-    // Create a callback function to handle streaming updates
-    const handleProgress = (chunk, aggregated) => {
-      res.write(`data: ${JSON.stringify(chunk)}\n\n`);
-    };
-    
-    // Log the request details
-    console.log('Request details:', {
-      messageCount: messages.length,
-      temperature: temperature || 0.7,
-      max_tokens: max_tokens || 4096,
-      stream: true
+    // Create Claude instance
+    const claude = new ClaudeOpus({
+      apiKey: process.env.OPENROUTER_API_KEY,
+      modelId: process.env.DEFAULT_MODEL_ID || 'anthropic/claude-3-opus-20240229',
+      defaultSystemPrompt: process.env.DEFAULT_SYSTEM_PROMPT
     });
     
-    try {
-      // Send the completion request with streaming enabled
-      await claude.createCompletion({
-        messages,
-        temperature: temperature || 0.7,
-        max_tokens: max_tokens || 4096,
-        stream: true,
-        onProgress: handleProgress
+    // Prepare request parameters
+    const requestParams = {
+      messages: messages,
+      stream: true,
+      temperature: 0.7,
+      max_tokens: 4000
+    };
+    
+    // Add system prompt if not already present
+    if (!messages.some(msg => msg.role === 'system')) {
+      requestParams.messages.unshift({
+        role: 'system',
+        content: process.env.DEFAULT_SYSTEM_PROMPT || 'You are Claude, a helpful AI assistant.'
       });
-      
-      // Send the [DONE] event to signal the end of the stream
-      res.write('data: [DONE]\n\n');
-      res.end();
-    } catch (completionError) {
-      console.error('Error during completion request:', completionError);
-      if (completionError.response) {
-        console.error('Response error details:', {
-          status: completionError.response.status,
-          statusText: completionError.response.statusText,
-          data: completionError.response.data
-        });
-      } else {
-        console.error('No response object in error');
-      }
-      
-      res.write(`data: ${JSON.stringify({ error: 'Completion request failed', details: completionError.message })}\n\n`);
-      res.end();
     }
+    
+    console.log(`Streaming request to model: ${claude.modelId}`);
+    
+    // Keep the connection alive with periodic heartbeats
+    const heartbeatInterval = setInterval(() => {
+      res.write(`data: ${JSON.stringify({ type: 'heartbeat', timestamp: Date.now() })}\n\n`);
+    }, 15000); // Send heartbeat every 15 seconds
+    
+    // Stream the completion
+    await claude.streamCompletion(
+      requestParams,
+      (chunk) => {
+        // Send each chunk to the client
+        if (chunk.choices && chunk.choices[0] && chunk.choices[0].delta && chunk.choices[0].delta.content) {
+          const content = chunk.choices[0].delta.content;
+          res.write(`data: ${JSON.stringify({ type: 'content', content })}\n\n`);
+        }
+      },
+      requestId
+    );
+    
+    // Clear the heartbeat interval
+    clearInterval(heartbeatInterval);
+    
+    // Signal completion
+    res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
+    res.end();
+    
   } catch (error) {
-    console.error('Error processing streaming chat request:', error);
-    console.error('Stack trace:', error.stack);
-    res.write(`data: ${JSON.stringify({ error: 'Failed to process request', details: error.message })}\n\n`);
+    console.error('Error in streaming completion:', error);
+    
+    // Send detailed error to client
+    res.write(`data: ${JSON.stringify({ 
+      type: 'error', 
+      details: error.message || 'An error occurred during streaming',
+      timestamp: Date.now()
+    })}\n\n`);
+    
+    // Ensure the connection is properly closed
     res.end();
   }
+});
+
+// GET endpoint for establishing SSE connection
+app.get('/api/chat/stream', (req, res) => {
+  console.log('SSE connection established');
+  
+  // Set headers for SSE
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  
+  // Flush headers to establish SSE connection
+  res.flushHeaders();
+  
+  // Send initial connection message
+  res.write(`data: ${JSON.stringify({ type: 'connected', message: 'SSE connection established' })}\n\n`);
+  
+  // Keep connection alive with heartbeats
+  const heartbeatInterval = setInterval(() => {
+    res.write(`data: ${JSON.stringify({ type: 'heartbeat', timestamp: Date.now() })}\n\n`);
+  }, 15000);
+  
+  // Handle client disconnect
+  req.on('close', () => {
+    console.log('SSE connection closed');
+    clearInterval(heartbeatInterval);
+  });
 });
 
 // Serve the React app for any other routes
