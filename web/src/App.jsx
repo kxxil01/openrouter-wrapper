@@ -333,7 +333,7 @@ function App() {
   };
 
   return (
-    <div className="flex h-screen bg-dark-primary text-dark-text overflow-hidden">
+    <div className="flex h-screen bg-[#171717] text-dark-text overflow-hidden">
       {/* Sidebar */}
       <Sidebar 
         conversations={conversations} 
