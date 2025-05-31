@@ -38,7 +38,7 @@ export class ClaudeOpus {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${this.apiKey}`,
-        'HTTP-Referer': 'https://github.com/user/claude-opus-wrapper', // Replace with your actual site
+        'HTTP-Referer': 'https://github.com/kxxil01/openrouter-wrapper', // Updated to actual repository
         'X-Title': 'Claude Opus Wrapper'
       }
     });
@@ -158,105 +158,131 @@ export class ClaudeOpus {
    * @returns {Promise<Object>} The aggregated completion response
    */
   async streamCompletion(requestParams, onProgress, requestId) {
-    console.log(`[${requestId}] Starting streaming completion request`);
+    console.log(`[${requestId}] Starting streaming completion request to ${this.client.defaults.baseURL}/chat/completions`);
+    console.log(`[${requestId}] Using model: ${requestParams.model}`);
+    console.log(`[${requestId}] API key: ${this.apiKey ? `${this.apiKey.substring(0, 10)}...` : 'undefined'}`);
     
-    try {
-      const response = await this.client.post('/chat/completions', requestParams, {
-        responseType: 'stream'
-      });
-      
-      return new Promise((resolve, reject) => {
-        // Aggregate response data
-        const aggregatedResponse = {
-          id: null,
-          model: this.modelId,
-          object: 'chat.completion',
-          created: Math.floor(Date.now() / 1000),
-          choices: [{
-            index: 0,
-            message: {
-              role: 'assistant',
-              content: ''
-            },
-            finish_reason: null
-          }],
-          usage: {
-            prompt_tokens: 0,
-            completion_tokens: 0,
-            total_tokens: 0
-          },
-          requestId
-        };
+    let retries = 0;
+    
+    while (true) {
+      try {
+        console.log(`[${requestId}] Sending streaming request (attempt ${retries + 1}/${this.maxRetries + 1})`);
         
-        let buffer = '';
-        
-        response.data.on('data', (chunk) => {
-          buffer += chunk.toString();
-          
-          // Process complete SSE messages
-          const lines = buffer.split('\n\n');
-          buffer = lines.pop(); // Keep the last incomplete chunk
-          
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const data = line.slice(6);
-              
-              if (data === '[DONE]') {
-                console.log(`[${requestId}] Stream completed`);
-                return;
-              }
-              
-              try {
-                const parsedData = JSON.parse(data);
-                
-                // Update aggregated response
-                if (!aggregatedResponse.id && parsedData.id) {
-                  aggregatedResponse.id = parsedData.id;
-                }
-                
-                if (parsedData.model) {
-                  aggregatedResponse.model = parsedData.model;
-                }
-                
-                // Extract the delta content
-                const delta = parsedData.choices[0]?.delta;
-                if (delta?.content) {
-                  aggregatedResponse.choices[0].message.content += delta.content;
-                }
-                
-                // Update finish reason if present
-                if (parsedData.choices[0]?.finish_reason) {
-                  aggregatedResponse.choices[0].finish_reason = parsedData.choices[0].finish_reason;
-                }
-                
-                // Update token usage if available
-                if (parsedData.usage) {
-                  aggregatedResponse.usage = parsedData.usage;
-                }
-                
-                // Call progress callback
-                onProgress(parsedData, aggregatedResponse);
-              } catch (error) {
-                console.error(`[${requestId}] Error parsing stream data:`, error);
-              }
-            }
+        const response = await this.client.post('/chat/completions', requestParams, {
+          responseType: 'stream',
+          headers: {
+            ...this.client.defaults.headers,
+            'Accept': 'text/event-stream'
           }
         });
         
-        response.data.on('end', () => {
-          console.log(`[${requestId}] Stream ended`);
-          resolve(aggregatedResponse);
-        });
+        console.log(`[${requestId}] Stream connection established`);
         
-        response.data.on('error', (error) => {
-          console.error(`[${requestId}] Stream error:`, error);
-          reject(error);
+        // Create and return a promise that will resolve with the complete response
+        return new Promise((resolve, reject) => {
+          // Aggregate response data
+          const aggregatedResponse = {
+            id: null,
+            model: this.modelId,
+            object: 'chat.completion',
+            created: Math.floor(Date.now() / 1000),
+            choices: [{
+              index: 0,
+              message: {
+                role: 'assistant',
+                content: ''
+              },
+              finish_reason: null
+            }],
+            usage: {
+              prompt_tokens: 0,
+              completion_tokens: 0,
+              total_tokens: 0
+            },
+            requestId
+          };
+          
+          let buffer = '';
+          
+          response.data.on('data', (chunk) => {
+            buffer += chunk.toString();
+            
+            // Process complete SSE messages
+            const lines = buffer.split('\n\n');
+            buffer = lines.pop(); // Keep the last incomplete chunk
+            
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                const data = line.slice(6);
+                
+                if (data === '[DONE]') {
+                  console.log(`[${requestId}] Stream completed`);
+                  return;
+                }
+                
+                try {
+                  const parsedData = JSON.parse(data);
+                  
+                  // Update aggregated response
+                  if (!aggregatedResponse.id && parsedData.id) {
+                    aggregatedResponse.id = parsedData.id;
+                  }
+                  
+                  if (parsedData.model) {
+                    aggregatedResponse.model = parsedData.model;
+                  }
+                  
+                  // Extract the delta content
+                  const delta = parsedData.choices[0]?.delta;
+                  if (delta?.content) {
+                    aggregatedResponse.choices[0].message.content += delta.content;
+                  }
+                  
+                  // Update finish reason if present
+                  if (parsedData.choices[0]?.finish_reason) {
+                    aggregatedResponse.choices[0].finish_reason = parsedData.choices[0].finish_reason;
+                  }
+                  
+                  // Update token usage if available
+                  if (parsedData.usage) {
+                    aggregatedResponse.usage = parsedData.usage;
+                  }
+                  
+                  // Call progress callback
+                  onProgress(parsedData, aggregatedResponse);
+                } catch (error) {
+                  console.error(`[${requestId}] Error parsing stream data:`, error);
+                }
+              }
+            }
+          });
+          
+          response.data.on('end', () => {
+            console.log(`[${requestId}] Stream ended`);
+            resolve(aggregatedResponse);
+          });
+          
+          response.data.on('error', (error) => {
+            console.error(`[${requestId}] Stream error:`, error);
+            reject(error);
+          });
         });
-      });
-    } catch (error) {
-      const errorDetails = extractErrorDetails(error);
-      console.error(`[${requestId}] Streaming request failed:`, errorDetails);
-      throw new Error(`OpenRouter streaming request failed: ${errorDetails.message}`);
+      } catch (error) {
+        const errorDetails = extractErrorDetails(error);
+        console.error(`[${requestId}] Streaming request failed:`, errorDetails);
+        
+        // Check if we should retry
+        if (retries >= this.maxRetries || !this.isRetryableError(error)) {
+          throw new Error(`OpenRouter streaming request failed after ${retries} retries: ${errorDetails.message}`);
+        }
+        
+        // Calculate backoff time and retry
+        const backoffTime = calculateBackoff(retries, this.retryDelay);
+        console.log(`[${requestId}] Retrying in ${Math.floor(backoffTime / 1000)} seconds (retry ${retries + 1}/${this.maxRetries})`);
+        
+        await new Promise(resolve => setTimeout(resolve, backoffTime));
+        retries++;
+      }
     }
   }
   

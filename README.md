@@ -1,22 +1,27 @@
 # Claude Opus 4 Wrapper with UI
 
-A production-ready JavaScript wrapper for Claude Opus 4 using the OpenRouter API, with a modern React-based web UI. This project includes a complete solution for interacting with Claude Opus 4, featuring streaming responses, automatic retries, and robust error handling.
+A production-ready JavaScript wrapper for Claude Opus 4 using the OpenRouter API, with a modern React-based web UI. This project includes a complete solution for interacting with Claude Opus 4, featuring streaming responses, automatic retries, and robust error handling. Optimized specifically for coding and deep thinking tasks, this wrapper provides specialized endpoints and enhanced UI features for developers.
 
 ## Features
 
 ### API Wrapper
 - ✅ Full support for Claude Opus 4 via OpenRouter
-- ✅ Streaming support with progress callbacks
-- ✅ Automatic retries with exponential backoff
-- ✅ Comprehensive error handling
-- ✅ Detailed logging with request IDs
+- ✅ Streaming support with progress callbacks and robust error recovery
+- ✅ Automatic retries with exponential backoff and detailed diagnostics
+- ✅ Comprehensive error handling with detailed logging
+- ✅ Request tracing with unique request IDs throughout the lifecycle
 - ✅ TypeScript-friendly (though written in pure JavaScript)
+- ✅ Specialized coding endpoints for optimization, explanation, and generation
 
 ### Web UI
 - ✅ Modern, responsive React interface
-- ✅ Real-time streaming responses
+- ✅ Real-time streaming responses with error recovery
 - ✅ Multi-conversation support
-- ✅ Markdown and code syntax highlighting
+- ✅ Enhanced markdown with GitHub-flavored syntax
+- ✅ Advanced code syntax highlighting for 100+ languages
+- ✅ One-click code copying with language detection
+- ✅ Line numbers for better code readability
+- ✅ LaTeX math rendering via KaTeX
 - ✅ Conversation management (create, rename, delete)
 - ✅ Typing indicators and loading states
 
@@ -26,8 +31,8 @@ The easiest way to get started is to use the provided setup script:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/claude-opus-wrapper.git
-cd claude-opus-wrapper
+git clone https://github.com/kxxil01/openrouter-wrapper.git
+cd openrouter-wrapper
 
 # Run the setup script
 ./setup.sh
@@ -293,12 +298,26 @@ Returns: Promise resolving to the completion response object.
 
 The wrapper includes comprehensive error handling with automatic retries for transient errors:
 
-- Network errors are automatically retried
-- Rate limit errors (429) are automatically retried
-- Server errors (5xx) are automatically retried
+- Network errors are automatically retried with exponential backoff
+- Rate limit errors (429) are automatically retried with appropriate delays
+- Server errors (5xx) are automatically retried with progressive backoff
 - Client errors (4xx) are not retried (except 429)
+- Streaming errors are handled gracefully with reconnection logic
+- Detailed error logging with request IDs for traceability
+- User-friendly error messages in the UI
 
-Errors include detailed information to help with debugging.
+The enhanced error handling system provides:
+
+- Detailed diagnostic information in the console logs
+- API key validation and format checking
+- Robust stream parsing with error recovery
+- Graceful degradation when services are unavailable
+
+Errors include detailed information to help with debugging, including:
+- Request parameters (with sensitive data redacted)
+- Response status codes and headers
+- Detailed error messages from the OpenRouter API
+- Stack traces for server-side debugging
 
 ## Testing
 

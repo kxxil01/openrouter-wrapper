@@ -216,58 +216,69 @@ app.post('/api/chat', async (req, res) => {
 
 // API endpoint for streaming chat completions
 app.post('/api/chat/stream', async (req, res) => {
+  // Set headers for SSE
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  
   try {
-    const { messages } = req.body;
+    const { messages, temperature, max_tokens } = req.body;
     
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
-      return res.status(400).json({ error: 'Messages array is required' });
+      res.write(`data: ${JSON.stringify({ error: 'Messages array is required' })}\n\n`);
+      res.end();
+      return;
     }
     
-    // Set up SSE
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
+    console.log(`Received streaming chat request with ${messages.length} messages`);
+    console.log('Using API key:', claude.apiKey ? `${claude.apiKey.substring(0, 10)}...` : 'undefined');
+    console.log('Using model:', claude.modelId);
     
-    // Function to send SSE data
-    const sendData = (data) => {
-      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    // Create a callback function to handle streaming updates
+    const handleProgress = (chunk, aggregated) => {
+      res.write(`data: ${JSON.stringify(chunk)}\n\n`);
     };
     
-    // Stream the response
-    await claude.createCompletion({
-      messages,
-      temperature: 0.7,
-      max_tokens: 4096,
-      stream: true,
-      onProgress: (chunk, aggregated) => {
-        // Send the delta content
-        if (chunk.choices && chunk.choices[0]?.delta?.content) {
-          sendData({
-            type: 'content',
-            content: chunk.choices[0].delta.content
-          });
-        }
-        
-        // Send finish reason if present
-        if (chunk.choices && chunk.choices[0]?.finish_reason) {
-          sendData({
-            type: 'finish',
-            finish_reason: chunk.choices[0].finish_reason
-          });
-        }
-      }
+    // Log the request details
+    console.log('Request details:', {
+      messageCount: messages.length,
+      temperature: temperature || 0.7,
+      max_tokens: max_tokens || 4096,
+      stream: true
     });
     
-    // End the stream
-    sendData({ type: 'done' });
-    res.end();
+    try {
+      // Send the completion request with streaming enabled
+      await claude.createCompletion({
+        messages,
+        temperature: temperature || 0.7,
+        max_tokens: max_tokens || 4096,
+        stream: true,
+        onProgress: handleProgress
+      });
+      
+      // Send the [DONE] event to signal the end of the stream
+      res.write('data: [DONE]\n\n');
+      res.end();
+    } catch (completionError) {
+      console.error('Error during completion request:', completionError);
+      if (completionError.response) {
+        console.error('Response error details:', {
+          status: completionError.response.status,
+          statusText: completionError.response.statusText,
+          data: completionError.response.data
+        });
+      } else {
+        console.error('No response object in error');
+      }
+      
+      res.write(`data: ${JSON.stringify({ error: 'Completion request failed', details: completionError.message })}\n\n`);
+      res.end();
+    }
   } catch (error) {
     console.error('Error processing streaming chat request:', error);
-    res.write(`data: ${JSON.stringify({ 
-      type: 'error',
-      error: 'Failed to process request',
-      details: error.message 
-    })}\n\n`);
+    console.error('Stack trace:', error.stack);
+    res.write(`data: ${JSON.stringify({ error: 'Failed to process request', details: error.message })}\n\n`);
     res.end();
   }
 });
