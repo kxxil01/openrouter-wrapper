@@ -1,334 +1,157 @@
-# Claude Opus 4 Wrapper with UI
+# Claude Opus Wrapper with UI
 
-A production-ready JavaScript wrapper for Claude Opus 4 using the OpenRouter API, with a modern React-based web UI. This project includes a complete solution for interacting with Claude Opus 4, featuring streaming responses, automatic retries, and robust error handling. Optimized specifically for coding and deep thinking tasks, this wrapper provides specialized endpoints and enhanced UI features for developers.
+A production-ready JavaScript wrapper for Claude Opus and other Anthropic Claude models using the OpenRouter API, with a modern React-based web UI. This project provides a complete solution for interacting with Claude models, featuring streaming responses, conversation management, and a clean, minimal interface.
 
 ## Features
 
-### API Wrapper
-- ✅ Full support for Claude Opus 4 via OpenRouter
-- ✅ Streaming support with progress callbacks and robust error recovery
-- ✅ Automatic retries with exponential backoff and detailed diagnostics
-- ✅ Comprehensive error handling with detailed logging
-- ✅ Request tracing with unique request IDs throughout the lifecycle
-- ✅ TypeScript-friendly (though written in pure JavaScript)
-- ✅ Specialized coding endpoints for optimization, explanation, and generation
+- ✅ Support for Claude Opus, Sonnet, and other Anthropic models
+- ✅ Real-time streaming responses
+- ✅ Conversation history with persistent storage
+- ✅ Multi-conversation management
+- ✅ Modern, minimal UI design
+- ✅ Mobile-friendly responsive interface
+- ✅ Robust error handling and recovery
 
-### Web UI
-- ✅ Modern, responsive React interface
-- ✅ Real-time streaming responses with error recovery
-- ✅ Multi-conversation support
-- ✅ Enhanced markdown with GitHub-flavored syntax
-- ✅ Advanced code syntax highlighting for 100+ languages
-- ✅ One-click code copying with language detection
-- ✅ Line numbers for better code readability
-- ✅ LaTeX math rendering via KaTeX
-- ✅ Conversation management (create, rename, delete)
-- ✅ Typing indicators and loading states
+## Prerequisites
 
-## Quick Start
+- Node.js (v18 or higher recommended)
+- npm or yarn
+- An OpenRouter API key with access to Claude models
 
-The easiest way to get started is to use the provided setup script:
+## Installation
 
 ```bash
 # Clone the repository
-git clone https://github.com/kxxil01/openrouter-wrapper.git
-cd openrouter-wrapper
+git clone https://github.com/yourusername/claude-opus-wrapper.git
+cd claude-opus-wrapper
 
-# Run the setup script
-./setup.sh
-
-# Start the application
-npm start
-```
-
-Then open your browser to http://localhost:3001
-
-## Manual Installation
-
-```bash
-# Install main dependencies
+# Install dependencies for the server
 npm install
 
-# Install web UI dependencies
-cd web && npm install && cd ..
+# Install dependencies for the web client
+cd web
+npm install
+cd ..
 ```
 
-## Configuration
+## Environment Setup
 
-Create a `.env` file based on the provided `.env.example`:
-
-```bash
-cp .env.example .env
-```
-
-Then edit the `.env` file to add your OpenRouter API key:
+This application requires an `.env` file in the root directory with the following variables:
 
 ```
+# API Configuration
 OPENROUTER_API_KEY=your_openrouter_api_key_here
+PORT=3001  # Optional, defaults to 3001
+
+# Database Configuration
+DATABASE_URL=sqlite:./data/conversations.db  # SQLite database path
+# Or for PostgreSQL:
+# DATABASE_URL=postgresql://username:password@localhost:5432/claude_conversations
+
+# Optional Configuration
+DEFAULT_MODEL=anthropic/claude-opus-4  # Default model to use
+REQUEST_TIMEOUT=60000  # Timeout for API requests in ms
+MAX_RETRIES=3  # Maximum number of retries for failed requests
 ```
 
-## Building and Running
+**Important:** The `.env` file contains sensitive information and is excluded from version control via `.gitignore`. Never commit your `.env` file to a repository.
 
-```bash
-# Build the web UI
-npm run build
+### Creating the .env file
 
-# Start the server
-npm start
-```
+1. Copy the example file:
+   ```bash
+   cp .env.example .env
+   ```
 
-## Development
+2. Edit the `.env` file and add your OpenRouter API key:
+   ```
+   OPENROUTER_API_KEY=your_openrouter_api_key_here
+   ```
 
-To run the application in development mode with hot reloading:
+## Running the Application
+
+### Development Mode
+
+Run the application in development mode with hot reloading:
 
 ```bash
 npm run dev
 ```
 
-This will start both the API server and the web UI development server.
+This starts both the backend server and the web client in development mode:
+- Backend API: http://localhost:3001
+- Web Client: http://localhost:3000
+
+### Production Mode
+
+For production deployment:
+
+```bash
+# Build the web client
+cd web
+npm run build
+cd ..
+
+# Start the server in production mode
+npm start
+```
+
+In production mode, the server will serve the static files from the built web client at http://localhost:3001.
 
 ## Usage
 
-### Basic Usage
+1. Open your browser and navigate to http://localhost:3000 (development) or http://localhost:3001 (production)
+2. Create a new conversation by clicking the "New Chat" button
+3. Enter your message and press Enter to send
+4. View Claude's response in real-time as it streams
 
-```javascript
-import { ClaudeOpus } from './src/index.js';
+### Model Selection
 
-// Create a client instance
-const claude = new ClaudeOpus({
-  apiKey: 'your_openrouter_api_key', // Optional if set in .env
-  modelId: 'anthropic/claude-3-opus-20240229', // Optional, this is the default
-  timeout: 60000, // Optional, default is 60 seconds
-  maxRetries: 3, // Optional, default is 3
-  defaultSystemPrompt: 'You are Claude, a helpful AI assistant.' // Optional
-});
+You can switch between different Claude models using the model selector dropdown in the UI. Available models include:
 
-// Send a completion request
-async function getCompletion() {
-  try {
-    const response = await claude.createCompletion({
-      messages: [
-        { role: 'user', content: 'Explain quantum computing in simple terms.' }
-      ],
-      temperature: 0.7,
-      max_tokens: 1000
-    });
-    
-    console.log('Response:', response.choices[0].message.content);
-  } catch (error) {
-    console.error('Error:', error.message);
-  }
-}
+- Claude Opus 4
+- Claude Sonnet 4
+- Claude 3.7 Sonnet
+- (Other models available through your OpenRouter account)
 
-getCompletion();
-```
+## Architecture
 
-### Streaming Responses
+This application consists of two main components:
 
-```javascript
-import { ClaudeOpus } from './src/index.js';
+### Backend Server
 
-const claude = new ClaudeOpus();
+- Built with Express.js
+- Handles API communication with OpenRouter
+- Manages conversation persistence in a database
+- Implements streaming responses with Server-Sent Events (SSE)
 
-async function streamCompletion() {
-  try {
-    let fullResponse = '';
-    
-    const response = await claude.createCompletion({
-      messages: [
-        { role: 'user', content: 'Write a short poem about programming.' }
-      ],
-      temperature: 0.7,
-      max_tokens: 500,
-      stream: true,
-      onProgress: (chunk, aggregated) => {
-        // Get the new content delta
-        const newContent = chunk.choices[0]?.delta?.content || '';
-        if (newContent) {
-          process.stdout.write(newContent);
-          fullResponse += newContent;
-        }
-      }
-    });
-    
-    console.log('\n\nFull response:', fullResponse);
-    console.log('Token usage:', response.usage);
-  } catch (error) {
-    console.error('Error:', error.message);
-  }
-}
+### Web Client
 
-streamCompletion();
-```
+- Built with React and Vite
+- Modern UI with Tailwind CSS
+- Responsive design for desktop and mobile
+- Real-time streaming message display
 
-### Using System Prompts
+## Troubleshooting
 
-```javascript
-import { ClaudeOpus } from './src/index.js';
+### Port Conflicts
 
-const claude = new ClaudeOpus();
+If you encounter a "Port already in use" error when starting the application, you may have another service running on the same port. You can:
 
-async function completionWithSystemPrompt() {
-  try {
-    const response = await claude.createCompletion({
-      messages: [
-        { 
-          role: 'system', 
-          content: 'You are a senior software engineer specializing in JavaScript. Provide code examples when relevant.' 
-        },
-        { 
-          role: 'user', 
-          content: 'How would you implement a debounce function?' 
-        }
-      ],
-      temperature: 0.3,
-      max_tokens: 1500
-    });
-    
-    console.log('Response:', response.choices[0].message.content);
-  } catch (error) {
-    console.error('Error:', error.message);
-  }
-}
+1. Stop the other service using that port, or
+2. Change the port in the `.env` file for the server and/or in the `vite.config.js` for the web client
 
-completionWithSystemPrompt();
-```
+### API Key Issues
 
-## Web UI
+If you encounter authentication errors, ensure:
+1. Your OpenRouter API key is correct in the `.env` file
+2. Your OpenRouter account has access to Claude models
+3. You have sufficient credit in your OpenRouter account
 
-The project includes a modern web UI built with React and Tailwind CSS that provides a user-friendly interface for interacting with Claude Opus 4, optimized for coding and deep thinking tasks.
+## Contributing
 
-### Features
-
-- **Streaming Responses**: See Claude's responses appear in real-time with typing indicators
-- **Multiple Conversations**: Create, manage, and switch between different conversations
-- **Enhanced Markdown Support**: Full markdown rendering with GitHub-flavored markdown
-- **Advanced Code Handling**:
-  - Syntax highlighting for 100+ programming languages
-  - Line numbers for better code readability
-  - One-click code copying functionality
-  - Automatic language detection and labeling
-- **Mathematical Notation**: Full support for LaTeX math expressions via KaTeX
-- **Responsive Design**: Works on desktop and mobile devices
-- **Error Handling**: Graceful handling of API errors with user-friendly messages
-
-### Architecture
-
-The web UI is built with:
-
-- **React 18**: For the UI components and state management
-- **Vite**: For fast development and optimized builds
-- **Tailwind CSS**: For styling with a utility-first approach
-- **Express.js**: For the backend API server
-- **Server-Sent Events (SSE)**: For streaming responses from the API
-
-### API Endpoints
-
-The server exposes the following API endpoints:
-
-#### General Chat
-- **POST /api/chat**: Send a non-streaming chat request to Claude Opus 4
-- **POST /api/chat/stream**: Send a streaming chat request to Claude Opus 4 (using SSE)
-
-#### Specialized Coding Endpoints
-- **POST /api/code/optimize**: Optimize code with detailed improvements
-  ```json
-  {
-    "code": "function fibonacci(n) { if (n <= 1) return n; return fibonacci(n-1) + fibonacci(n-2); }",
-    "language": "javascript"
-  }
-  ```
-
-- **POST /api/code/explain**: Get detailed explanation of code functionality
-  ```json
-  {
-    "code": "const memoize = fn => { const cache = {}; return (...args) => { const key = JSON.stringify(args); return cache[key] = cache[key] || fn(...args); }; };",
-    "language": "javascript",
-    "detail_level": "high" // optional: "low", "moderate", "high"
-  }
-  ```
-
-- **POST /api/code/generate**: Generate production-ready code from requirements
-  ```json
-  {
-    "prompt": "Create a React hook that debounces input values with TypeScript support",
-    "language": "typescript",
-    "include_tests": true // optional
-  }
-  ```
-
-## API Reference
-
-### `ClaudeOpus` Class
-
-#### Constructor Options
-
-```javascript
-const claude = new ClaudeOpus({
-  apiKey: string,           // OpenRouter API key
-  modelId: string,          // Model ID (default: 'anthropic/claude-3-opus-20240229')
-  timeout: number,          // Request timeout in ms (default: 60000)
-  maxRetries: number,       // Maximum retries for failed requests (default: 3)
-  retryDelay: number,       // Base delay between retries in ms (default: 1000)
-  defaultSystemPrompt: string // Default system prompt to use when none provided
-});
-```
-
-#### Methods
-
-##### `createCompletion(params)`
-
-Sends a completion request to Claude Opus via OpenRouter.
-
-Parameters:
-- `params.messages`: Array of message objects with `role` and `content` (required)
-- `params.temperature`: Temperature for sampling (default: 0.7)
-- `params.max_tokens`: Maximum tokens to generate (default: 4096)
-- `params.stream`: Whether to stream the response (default: false)
-- `params.onProgress`: Callback for streaming progress (required if `stream` is true)
-- `params.top_p`: Top-p sampling parameter (optional)
-- `params.top_k`: Top-k sampling parameter (optional)
-- `params.stop`: Array of stop sequences (optional)
-- `params.presence_penalty`: Presence penalty (optional)
-- `params.frequency_penalty`: Frequency penalty (optional)
-
-Returns: Promise resolving to the completion response object.
-
-## Error Handling
-
-The wrapper includes comprehensive error handling with automatic retries for transient errors:
-
-- Network errors are automatically retried with exponential backoff
-- Rate limit errors (429) are automatically retried with appropriate delays
-- Server errors (5xx) are automatically retried with progressive backoff
-- Client errors (4xx) are not retried (except 429)
-- Streaming errors are handled gracefully with reconnection logic
-- Detailed error logging with request IDs for traceability
-- User-friendly error messages in the UI
-
-The enhanced error handling system provides:
-
-- Detailed diagnostic information in the console logs
-- API key validation and format checking
-- Robust stream parsing with error recovery
-- Graceful degradation when services are unavailable
-
-Errors include detailed information to help with debugging, including:
-- Request parameters (with sensitive data redacted)
-- Response status codes and headers
-- Detailed error messages from the OpenRouter API
-- Stack traces for server-side debugging
-
-## Testing
-
-Run the tests with:
-
-```bash
-npm test
-```
-
-Note: Some tests require a valid OpenRouter API key to run. These tests are commented out by default.
+Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-MIT
+This project is licensed under the MIT License - see the LICENSE file for details.
