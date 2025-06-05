@@ -13,7 +13,7 @@ const CLAUDE_MODELS = [
 
 function App() {
   // UI state
-  const [isSidebarOpen, setSidebarOpen] = useState(true);
+  const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   
@@ -163,9 +163,24 @@ function App() {
   };
 
   // Handle selecting an existing conversation
-  const handleSelectConversation = (conversation) => {
-    setCurrentConversation(conversation);
-    setError(null);
+  const handleSelectConversation = async (conversationId) => {
+    try {
+      // Find the conversation in our list
+      const conversation = conversations.find(conv => conv.id === conversationId);
+      if (!conversation) {
+        console.error('Conversation not found:', conversationId);
+        return;
+      }
+      
+      setCurrentConversation(conversation);
+      setError(null);
+      
+      // Fetch messages for this conversation
+      await fetchMessages(conversationId);
+    } catch (error) {
+      console.error('Error selecting conversation:', error);
+      setError('Failed to load conversation: ' + (error.message || 'Unknown error'));
+    }
   };
 
   // Handle sending a message to Claude API via backend
@@ -233,15 +248,19 @@ function App() {
       }));
       
       // Add the new user message if it's not already in the messages array
-      // (for existing conversations, we've already added it to localMessages)
-      if (!isNewConversation) {
+      // This check was causing the issue with streaming in new conversations
+      // because for new conversations, we're not correctly checking if the user message is already included
+      const lastMessage = apiMessages[apiMessages.length - 1];
+      const isUserMessageAlreadyIncluded = lastMessage && lastMessage.role === 'user' && lastMessage.content === content;
+      
+      if (!isUserMessageAlreadyIncluded) {
         apiMessages.push({
           role: 'user',
           content
         });
       }
       
-      console.log('Sending message to Claude API...');
+      console.log('Sending message to Claude API...', apiMessages);
       
       try {
         // Define responseData at the top level so it's available in all code paths
@@ -263,6 +282,7 @@ function App() {
           try {
             // Call the Claude API with streaming enabled and pass the conversation ID
             // Use the enhanced API with callbacks for better stream handling
+            console.log('Starting streaming request with', apiMessages.length, 'messages');
             streamController = await api.sendMessageToClaudeAPI(
               selectedModel.id, 
               apiMessages, 
@@ -286,6 +306,14 @@ function App() {
                         ...updatedMessages[assistantMessageIndex],
                         content: streamedContent
                       };
+                    } else {
+                      // If we somehow don't have a streaming message placeholder,
+                      // add one now to ensure we show the streaming content
+                      updatedMessages.push({
+                        role: 'assistant',
+                        content: streamedContent,
+                        isStreaming: true
+                      });
                     }
                     
                     return updatedMessages;

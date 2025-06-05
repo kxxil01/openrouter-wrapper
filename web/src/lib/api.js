@@ -2,7 +2,71 @@
  * API service for interacting with the backend server
  */
 
-const API_BASE_URL = 'http://localhost:3001/api';
+// Determine the base API URL based on the current environment
+const getApiBaseUrl = () => {
+  // For production environment, use relative URL to the same origin
+  if (window.location.hostname !== 'localhost') {
+    return '/api';
+  }
+  
+  // Always use port 3001 for API server in development
+  return 'http://localhost:3001/api';
+};
+
+const API_BASE_URL = getApiBaseUrl();
+console.log(`Using API base URL: ${API_BASE_URL}`);
+
+const DEFAULT_RETRY_ATTEMPTS = 3;
+const DEFAULT_RETRY_DELAY = 1000;
+
+/**
+ * Utility function to retry fetch requests with exponential backoff
+ * @param {string} url - The URL to fetch
+ * @param {Object} options - Fetch options
+ * @param {number} maxRetries - Maximum number of retry attempts
+ * @param {number} baseDelay - Base delay in milliseconds between retries
+ * @returns {Promise<Response>} The fetch response
+ */
+async function retryFetch(url, options = {}, maxRetries = DEFAULT_RETRY_ATTEMPTS, baseDelay = DEFAULT_RETRY_DELAY) {
+  let lastError = null;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(url, options);
+      
+      // Only retry on network errors, 429 (rate limit), or 5xx errors
+      if (response.ok || (response.status !== 429 && (response.status < 500 || response.status >= 600))) {
+        return response;
+      }
+      
+      // For retryable errors, continue to the retry logic
+      console.warn(`Request failed (${response.status}), attempt ${attempt + 1}/${maxRetries + 1}`);
+      lastError = new Error(`Server responded with status: ${response.status} ${response.statusText}`);
+      
+      // If this was the last attempt, return the failed response anyway
+      if (attempt === maxRetries) {
+        return response;
+      }
+    } catch (error) {
+      // Network errors
+      console.warn(`Network error on attempt ${attempt + 1}/${maxRetries + 1}: ${error.message}`);
+      lastError = error;
+      
+      // If this was the last attempt, throw the error
+      if (attempt === maxRetries) {
+        throw error;
+      }
+    }
+    
+    // Calculate exponential backoff with jitter
+    const delay = Math.min(baseDelay * Math.pow(2, attempt), 30000) * (0.8 + Math.random() * 0.4);
+    console.log(`Retrying in ${Math.round(delay)}ms...`);
+    await new Promise(resolve => setTimeout(resolve, delay));
+  }
+  
+  // This should only happen if there's a logic error in the retry loop
+  throw lastError || new Error('Retry attempt count exceeded');
+}
 
 /**
  * Fetch all conversations
@@ -11,7 +75,7 @@ const API_BASE_URL = 'http://localhost:3001/api';
 export async function getConversations() {
   try {
     console.log('Fetching conversations from API...');
-    const response = await fetch(`${API_BASE_URL}/conversations`);
+    const response = await retryFetch(`${API_BASE_URL}/conversations`);
     console.log('Received response with status:', response.status);
     
     if (!response.ok) {
@@ -154,24 +218,33 @@ export async function updateConversation(id, updates) {
 }
 
 /**
- * Delete a conversation
- * @param {string} id - The conversation ID
- * @returns {Promise<boolean>} Success status
+ * Delete a conversation and all its messages
+ * @param {string} conversationId - The ID of the conversation to delete
+ * @returns {Promise<Object>} The response data
  */
-export async function deleteConversation(id) {
+export async function deleteConversation(conversationId) {
+  if (!conversationId) {
+    throw new Error('Conversation ID is required');
+  }
+  
+  console.log(`Deleting conversation ${conversationId}`);
+  
   try {
-    const response = await fetch(`${API_BASE_URL}/conversations/${id}`, {
+    const response = await retryFetch(`${API_BASE_URL}/conversations/${conversationId}`, {
       method: 'DELETE'
     });
     
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to delete conversation');
+      const errorData = await response.json().catch(() => ({ 
+        error: { message: `HTTP error ${response.status}` } 
+      }));
+      
+      throw new Error(errorData.error?.message || `Failed to delete conversation (HTTP ${response.status})`);
     }
     
-    return true;
+    return await response.json();
   } catch (error) {
-    console.error('Error deleting conversation:', error);
+    console.error(`Error deleting conversation ${conversationId}:`, error);
     throw error;
   }
 }
@@ -279,279 +352,210 @@ export async function saveMessage(conversationId, role, content) {
 }
 
 /**
- * Send a message to the Claude API
- * @param {string} modelId - The model ID
- * @param {Array} messages - The conversation messages
+ * Send a message to Claude API via chat/completions endpoint
+ * @param {string} modelId - The model ID to use
+ * @param {Array} messages - The messages to send
  * @param {boolean} stream - Whether to stream the response
- * @param {string} [conversationId] - The conversation ID for database storage
- * @param {Function} [onStreamChunk] - Callback for each stream chunk (when streaming)
- * @param {Function} [onStreamError] - Callback for stream errors (when streaming)
- * @param {Function} [onStreamComplete] - Callback when stream completes (when streaming)
- * @returns {Promise<Object|ReadableStream>} The API response or a controller to manage the stream
+ * @param {string} conversationId - The conversation ID
+ * @param {Function} onStreamChunk - Callback for each stream chunk
+ * @param {Function} onStreamError - Callback for stream errors
+ * @param {Function} onStreamComplete - Callback for stream completion
+ * @returns {Promise<Object|ReadableStream>} The Claude response or stream controller
  */
-export async function sendMessageToClaudeAPI(modelId, messages, stream = false, conversationId = null, onStreamChunk, onStreamError, onStreamComplete) {
+export async function sendMessageToClaudeAPI(
+  modelId, 
+  messages, 
+  stream = false, 
+  conversationId = null, 
+  onStreamChunk, 
+  onStreamError, 
+  onStreamComplete
+) {
   try {
-    // Validate inputs
-    if (!modelId) throw new Error('Model ID is required');
-    if (!Array.isArray(messages) || messages.length === 0) throw new Error('Messages must be a non-empty array');
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      throw new Error('Valid messages array is required');
+    }
     
-    // Log request details (without full message content for privacy/brevity)
-    const requestId = Math.random().toString(36).substring(2, 10);
-    console.log(`[${requestId}] Sending request to Claude API via backend proxy:`);
-    console.log(`[${requestId}] Model: ${modelId}, Messages: ${messages.length}, Stream: ${stream}, Conversation: ${conversationId || 'none'}`);
-    
-    // Prepare request
-    const requestBody = {
+    const payload = {
       model: modelId,
-      messages,
-      stream,
+      messages: messages,
+      stream: stream,
       conversation_id: conversationId
     };
     
-    // Send request to backend proxy
-    const response = await fetch(`${API_BASE_URL}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': stream ? 'text/event-stream' : 'application/json'
-      },
-      body: JSON.stringify(requestBody)
-    });
+    console.log(`Sending ${stream ? 'streaming' : 'non-streaming'} request to Claude API with ${messages.length} messages`);
     
-    // Handle non-OK responses
-    if (!response.ok) {
-      let errorData;
-      let responseClone = response.clone(); // Clone the response to avoid reading the body multiple times
-      
-      try {
-        errorData = await responseClone.json();
-      } catch (parseError) {
-        // Handle case where response isn't valid JSON
-        console.error(`[${requestId}] Failed to parse error response:`, parseError);
-        
-        try {
-          const responseText = await response.text();
-          
-          // Check if the response is HTML (error page)
-          if (responseText.includes('<!DOCTYPE') || responseText.includes('<html')) {
-            console.error(`[${requestId}] Received HTML error page instead of JSON`);
-            errorData = { error: 'Received HTML error page from server' };
-          } else {
-            errorData = { error: 'Unknown error format from server', raw: responseText.substring(0, 200) };
-          }
-        } catch (textError) {
-          console.error(`[${requestId}] Failed to parse error response as text:`, textError);
-          errorData = { error: 'Failed to read error response' };
-        }
-      }
-      
-      console.error(`[${requestId}] API error response:`, errorData);
-      
-      // Create a more informative error message
-      const errorMessage = errorData.error || errorData.message || `Failed to send message to Claude API (${response.status})`;
-      const error = new Error(errorMessage);
-      error.status = response.status;
-      error.code = errorData.code || 'unknown_error';
-      error.details = errorData.details || null;
-      error.requestId = requestId;
-      
-      if (stream && onStreamError) {
-        onStreamError(error);
-      }
-      
-      throw error;
-    }
-    
-    // Handle streaming responses
     if (stream) {
-      console.log(`[${requestId}] Processing streaming response`);
+      // For streaming requests
+      console.log('Starting streaming request...');
+      console.log('Messages being sent:', JSON.stringify(messages));
+      let fullContent = '';
       
-      // For streaming, set up a reader and process chunks
-      let reader;
-      try {
-        reader = response.body.getReader();
-      } catch (readerError) {
-        console.error(`[${requestId}] Error setting up stream reader:`, readerError);
-        if (onStreamError) {
-          onStreamError(new Error(`Error setting up streaming: ${readerError.message}`));
-        }
-        return { controller: { abort: () => {} } };
-      }
-      
-      let decoder = new TextDecoder();
-      let buffer = '';
-      
-      // Create an abort controller to allow the caller to cancel the stream
+      // Create a controller that allows aborting the stream
+      const abortController = new AbortController();
       const controller = {
         abort: () => {
-          console.log(`[${requestId}] Stream manually aborted by client`);
-          reader.cancel();
+          console.log('Stream manually aborted by client');
+          abortController.abort();
         }
       };
       
-      // Start processing the stream
-      (async () => {
-        try {
-          console.log(`[${requestId}] Starting to process stream chunks`);
-          let accumulatedContent = '';
+      // Make the API request
+      try {
+        const response = await fetch(`${API_BASE_URL}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'text/event-stream'
+          },
+          body: JSON.stringify(payload),
+          signal: abortController.signal
+        });
+        
+        if (!response.ok) {
+          // Handle HTTP error responses
+          let errorMessage = `Server error: ${response.status} ${response.statusText}`;
           
-          while (true) {
-            const { done, value } = await reader.read();
+          try {
+            const errorText = await response.text();
+            console.error('Error response:', errorText);
             
-            if (done) {
-              console.log(`[${requestId}] Stream complete, total content length: ${accumulatedContent.length}`);
-              if (onStreamComplete) onStreamComplete(accumulatedContent);
-              break;
+            try {
+              const errorJson = JSON.parse(errorText);
+              if (errorJson.error && errorJson.error.message) {
+                errorMessage = errorJson.error.message;
+              }
+            } catch (e) {
+              // If parsing fails, use the raw text if it's not too long
+              if (errorText && errorText.length < 200) errorMessage = errorText;
             }
+          } catch (e) {
+            console.error('Failed to read error response:', e);
+          }
+          
+          console.error('Streaming request failed:', errorMessage);
+          if (onStreamError) onStreamError(new Error(errorMessage));
+          return controller;
+        }
+        
+        // Create a reader from the response body
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        
+        // Process the stream
+        (async () => {
+          try {
+            console.log('Stream started, processing chunks...');
             
-            // Decode the chunk and add to buffer
-            const chunk = decoder.decode(value, { stream: true });
-            console.log(`[${requestId}] Received raw chunk: ${chunk.substring(0, 50)}...`);
-            buffer += chunk;
-            
-            // Process complete events in buffer
-            const events = buffer.split('\n\n');
-            buffer = events.pop() || ''; // Keep the last incomplete event in the buffer
-            
-            for (const event of events) {
-              if (event.trim() === '') continue;
+            while (true) {
+              const { done, value } = await reader.read();
               
-              if (!event.startsWith('data: ')) {
-                console.warn(`[${requestId}] Unexpected event format:`, event.substring(0, 50));
-                continue;
-              }
-              
-              const data = event.substring(6).trim();
-              
-              // Handle special DONE marker
-              if (data === '[DONE]') {
-                console.log(`[${requestId}] Received [DONE] event`);
-                continue;
-              }
-              
-              try {
-                // Parse the JSON data
-                const parsedData = JSON.parse(data);
+              if (done) {
+                console.log('Stream complete, total content length:', fullContent.length);
                 
-                // Check if the response contains an error object
-                if (parsedData.error) {
-                  console.error(`[${requestId}] Received error in stream:`, parsedData.error);
-                  
-                  // Create a proper error object with safe access to properties
-                  let errorObj;
-                  
-                  if (typeof parsedData.error === 'string') {
-                    errorObj = new Error(parsedData.error);
-                  } else if (parsedData.error && typeof parsedData.error === 'object') {
-                    errorObj = new Error(parsedData.error.message || 'Unknown error in stream');
-                    
-                    // Safely add additional properties
-                    if (parsedData.error.code) errorObj.code = parsedData.error.code;
-                    if (parsedData.error.requestId) errorObj.requestId = parsedData.error.requestId;
-                  } else {
-                    errorObj = new Error('Unknown error in stream');
-                  }
-                  
-                  // Add request ID for debugging
-                  errorObj.clientRequestId = requestId;
-                  
-                  if (onStreamError) {
-                    onStreamError(errorObj);
-                  }
-                  return; // Skip processing this chunk further
+                // Call the completion callback with the accumulated content
+                if (onStreamComplete) {
+                  onStreamComplete(fullContent);
+                }
+                break;
+              }
+              
+              // Decode the chunk and add to buffer
+              const chunk = decoder.decode(value, { stream: true });
+              buffer += chunk;
+              
+              // Split buffer by double newlines (SSE format)
+              const events = buffer.split('\n\n');
+              buffer = events.pop() || ''; // Keep last incomplete event in buffer
+              
+              // Process complete events
+              for (const event of events) {
+                if (!event.trim() || !event.startsWith('data: ')) continue;
+                
+                // Extract data payload
+                const data = event.substring(6).trim();
+                
+                // Handle DONE marker
+                if (data === '[DONE]') {
+                  console.log('Received [DONE] event');
+                  continue;
                 }
                 
-                // Process normal content chunk
-                if (parsedData.content) {
-                  const contentChunk = parsedData.content;
-                  console.log(`[${requestId}] Parsed content chunk: ${contentChunk.substring(0, 30)}...`);
-                  accumulatedContent += contentChunk;
+                // Parse JSON data
+                try {
+                  const parsedData = JSON.parse(data);
                   
-                  if (onStreamChunk) {
-                    // Ensure we're calling the callback with the content chunk
-                    onStreamChunk(contentChunk);
-                  }
-                } else if (parsedData.choices && parsedData.choices[0]) {
-                  // Handle OpenAI/Claude format
-                  let contentChunk = '';
-                  
-                  if (parsedData.choices[0].delta && parsedData.choices[0].delta.content) {
-                    contentChunk = parsedData.choices[0].delta.content;
-                  } else if (parsedData.choices[0].message && parsedData.choices[0].message.content) {
-                    contentChunk = parsedData.choices[0].message.content;
-                  } else if (parsedData.choices[0].text) {
-                    contentChunk = parsedData.choices[0].text;
+                  // Check for errors
+                  if (parsedData.error) {
+                    console.error('Error in stream data:', parsedData.error);
+                    if (onStreamError) {
+                      onStreamError(new Error(parsedData.error.message || 'Stream error'));
+                    }
+                    continue;
                   }
                   
-                  if (contentChunk) {
-                    console.log(`[${requestId}] Parsed content from choices: ${contentChunk.substring(0, 30)}...`);
-                    accumulatedContent += contentChunk;
+                  // Extract content from OpenAI-compatible format
+                  let content = '';
+                  if (parsedData.choices && 
+                      parsedData.choices[0] && 
+                      parsedData.choices[0].delta && 
+                      parsedData.choices[0].delta.content) {
+                    content = parsedData.choices[0].delta.content;
                     
+                    // Add to accumulated content
+                    fullContent += content;
+                    
+                    // Send chunk to callback
+                    console.log(`Received chunk: "${content.substring(0, 30)}${content.length > 30 ? '...' : ''}"`);
                     if (onStreamChunk) {
-                      onStreamChunk(contentChunk);
+                      onStreamChunk(content);
                     }
                   } else {
-                    console.warn(`[${requestId}] Received choices without content:`, parsedData.choices[0]);
+                    console.log('Received a non-content chunk:', JSON.stringify(parsedData));
                   }
-                } else {
-                  console.warn(`[${requestId}] Received chunk without content property:`, parsedData);
-                }
-              } catch (parseError) {
-                console.error(`[${requestId}] Error parsing stream chunk:`, parseError);
-                console.error(`[${requestId}] Raw chunk data:`, data.substring(0, 100));
-                
-                // Check if it's HTML instead of JSON
-                if (data.includes('<!DOCTYPE') || data.includes('<html')) {
-                  const htmlError = new Error('Received HTML instead of JSON in stream');
-                  if (onStreamError) onStreamError(htmlError);
+                } catch (parseError) {
+                  console.error('Error parsing stream data:', parseError, 'Raw data:', data.substring(0, 100));
                 }
               }
             }
+          } catch (streamError) {
+            // Handle errors during stream processing
+            console.error('Stream processing error:', streamError);
+            
+            // Only call error handler if the error isn't due to manual abort
+            if (!abortController.signal.aborted && onStreamError) {
+              onStreamError(streamError);
+            }
           }
-        } catch (streamError) {
-          // Safely log the error
-          console.error(`[${requestId}] Stream processing error:`, streamError ? streamError : 'Unknown stream error');
-          
-          // Create a proper error object with safe access to properties
-          let safeError;
-          
-          if (streamError && typeof streamError === 'object') {
-            safeError = new Error(streamError.message || 'Error processing stream');
-            // Copy any additional properties
-            Object.keys(streamError).forEach(key => {
-              if (key !== 'message') {
-                safeError[key] = streamError[key];
-              }
-            });
-          } else if (typeof streamError === 'string') {
-            safeError = new Error(streamError);
-          } else {
-            safeError = new Error('Unknown error during stream processing');
-          }
-          
-          // Add request ID for debugging
-          safeError.clientRequestId = requestId;
-          
-          if (onStreamError) onStreamError(safeError);
-        }
-      })();
+        })();
+        
+        // Return the controller so caller can abort if needed
+        return controller;
+      } catch (fetchError) {
+        console.error('Fetch error during streaming:', fetchError);
+        if (onStreamError) onStreamError(fetchError);
+        return controller;
+      }
+    } else {
+      // For non-streaming requests, use retryFetch for improved reliability
+      const response = await retryFetch(`${API_BASE_URL}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
       
-      // Return the controller so the caller can abort if needed
-      return controller;
-    }
-    
-    // Handle regular (non-streaming) responses
-    try {
-      const data = await response.json();
-      console.log(`[${requestId}] Received successful response from Claude API`);
-      return data;
-    } catch (parseError) {
-      console.error(`[${requestId}] Error parsing response:`, parseError);
-      const responseText = await response.text();
-      throw new Error(`Failed to parse API response: ${parseError.message}. Raw: ${responseText.substring(0, 100)}...`);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: { message: `HTTP error ${response.status}` } }));
+        throw new Error(errorData.error?.message || 'Failed to get response from Claude');
+      }
+      
+      return await response.json();
     }
   } catch (error) {
-    console.error('Error sending message to Claude API:', error);
+    console.error('Claude API error:', error);
     throw error;
   }
 }
