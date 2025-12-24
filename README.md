@@ -1,14 +1,19 @@
 # OpenRouter Wrapper
 
-Claude AI chat interface using OpenRouter - built with **Bun + Hono + React**.
+AI chat interface using OpenRouter API - built with **Bun + Hono + React**.
 
 ## Features
 
-- 🚀 **Fast**: Bun runtime + Hono framework
+- � **Google OAuth**: Secure authentication with session management
 - 💬 **Streaming**: Real-time SSE streaming responses
-- 📝 **Markdown**: Full markdown with syntax highlighting
-- 💾 **Persistent**: PostgreSQL conversation storage
-- 🎨 **Dark Mode**: Modern dark theme UI
+- 📝 **Markdown**: Full markdown with syntax highlighting + KaTeX math
+- � **Search**: Full-text search across conversations (Cmd+K)
+- ✏️ **Edit & Regenerate**: Edit messages and regenerate responses
+- 📤 **Export**: Download conversations as Markdown/JSON
+- 💾 **Persistent**: PostgreSQL with UUIDv7 for time-ordered IDs
+- 🎨 **Dark Mode**: Modern ChatGPT-like interface
+- ⌨️ **Keyboard Shortcuts**: Cmd+K search, Cmd+/ sidebar, Cmd+Shift+N new chat
+- 💰 **Paywall**: Free tier with 5 messages/day limit
 
 ## Quick Start
 
@@ -18,9 +23,9 @@ bun install
 
 # Set up environment
 cp .env.example .env
-# Edit .env with your DATABASE_URL and OPENROUTER_API_KEY
+# Edit .env with your credentials
 
-# Run database migration
+# Run database migrations
 bun run migrate
 
 # Build frontend
@@ -35,72 +40,104 @@ Open <http://localhost:3001>
 ## Project Structure
 
 ```text
-openrouter-wrapper/
-├── src/
-│   ├── server.ts       # Hono API server
-│   ├── migrate.ts      # Database migration
-│   ├── App.jsx         # React app
-│   ├── main.jsx        # React entry
-│   ├── index.css       # Tailwind styles
-│   ├── components/     # React components
-│   └── lib/            # API client
-├── dist/               # Built frontend
-├── public/             # Static assets
-├── index.html          # HTML template
-├── package.json
-├── vite.config.js
-├── tailwind.config.js
-└── .env
+src/
+├── server.ts              # Main Hono server (route mounting)
+├── migrate.ts             # Database migration runner
+├── routes/                # API route modules
+│   ├── auth.ts            # Login, logout, OAuth callback
+│   ├── conversations.ts   # CRUD, export, messages
+│   ├── messages.ts        # Message operations
+│   ├── chat.ts            # Chat completions (streaming)
+│   ├── preferences.ts     # User preferences
+│   ├── search.ts          # Full-text search
+│   └── models.ts          # OpenRouter models
+├── migrations/            # Database migrations (001-009)
+├── lib/
+│   ├── auth.ts            # Google OAuth utilities
+│   ├── db.ts              # PostgreSQL connection
+│   └── api/               # Frontend API client
+├── components/            # React components
+│   ├── ChatInterface.jsx
+│   ├── MessageList.jsx
+│   ├── Sidebar.jsx
+│   ├── SearchModal.jsx
+│   └── ...
+├── hooks/                 # Custom React hooks
+│   ├── useChat.js         # Chat logic
+│   ├── useAuth.js
+│   ├── useConversations.js
+│   └── ...
+├── App.jsx
+└── main.jsx
 ```
 
 ## Scripts
 
-| Command | Description |
-| ------- | ----------- |
-| `bun run dev` | Start server with hot reload |
-| `bun run build` | Build frontend |
-| `bun run migrate` | Run database migrations |
-| `bun run dev:vite` | Vite dev server (HMR) |
+| Command              | Description                    |
+| -------------------- | ------------------------------ |
+| `bun run dev`        | Start server with hot reload   |
+| `bun run build`      | Build frontend                 |
+| `bun run migrate`    | Run database migrations        |
+| `bun run precommit`  | Format, lint, typecheck, build |
+| `bun run lint`       | ESLint check                   |
+| `bun run format`     | Prettier format                |
 
 ## Environment Variables
 
 ```env
-OPENROUTER_API_KEY=your_api_key
+# Required
 DATABASE_URL=postgresql://user:pass@host:5432/db
+OPENROUTER_API_KEY=your_openrouter_api_key
+
+# Optional - Google OAuth (enables authentication)
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+
+# Optional
 PORT=3001
-DEFAULT_MODEL_ID=anthropic/claude-opus-4
+DEFAULT_MODEL_ID=deepseek/deepseek-r1-0528:free
+DISABLE_PAYWALL=true
 ```
 
 ## API Endpoints
 
-- `GET /api/health` - Health check
-- `GET /api/conversations` - List conversations
+### Authentication
+
+- `GET /auth/login` - Initiate Google OAuth
+- `GET /auth/callback` - OAuth callback
+- `GET /auth/logout` - Logout
+- `GET /api/auth/me` - Get current user
+
+### Conversations
+
+- `GET /api/conversations` - List user conversations
 - `POST /api/conversations` - Create conversation
 - `PUT /api/conversations/:id` - Update conversation
 - `DELETE /api/conversations/:id` - Delete conversation
 - `GET /api/conversations/:id/messages` - Get messages
-- `POST /api/messages` - Add message
-- `POST /api/chat/completions` - Chat with Claude (streaming)
+- `POST /api/conversations/:id/messages` - Add message
+- `DELETE /api/conversations/:id/messages/after/:index` - Delete messages after index
+- `POST /api/conversations/:id/generate-title` - Auto-generate title
+- `GET /api/conversations/:id/export` - Export as Markdown/JSON
 
-## Database Schema
+### Chat & Search
 
-```sql
-CREATE TABLE conversations (
-  id UUID PRIMARY KEY,
-  title VARCHAR(255),
-  model_id VARCHAR(100),
-  created_at TIMESTAMPTZ,
-  updated_at TIMESTAMPTZ
-);
+- `POST /api/chat/completions` - Chat with AI (streaming SSE)
+- `GET /api/search?q=query` - Full-text search
+- `GET /api/models` - List available models
+- `GET /api/preferences` - Get user preferences
+- `PATCH /api/preferences` - Update preferences
 
-CREATE TABLE messages (
-  id UUID PRIMARY KEY,
-  conversation_id UUID REFERENCES conversations(id) ON DELETE CASCADE,
-  role VARCHAR(20) CHECK (role IN ('user', 'assistant', 'system')),
-  content TEXT,
-  created_at TIMESTAMPTZ
-);
-```
+## Tech Stack
+
+| Layer    | Technology                    |
+| -------- | ----------------------------- |
+| Runtime  | Bun                           |
+| Backend  | Hono                          |
+| Frontend | React 18, Vite, TailwindCSS   |
+| Database | PostgreSQL                    |
+| Auth     | Google OAuth 2.0              |
+| AI       | OpenRouter API                |
 
 ## License
 
