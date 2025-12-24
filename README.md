@@ -30,11 +30,11 @@ bun run build
 bun run dev
 ```
 
-Open **http://localhost:3001**
+Open <http://localhost:3001>
 
 ## Project Structure
 
-```
+```text
 openrouter-wrapper/
 ├── src/
 │   ├── server.ts       # Hono API server
@@ -56,7 +56,7 @@ openrouter-wrapper/
 ## Scripts
 
 | Command | Description |
-|---------|-------------|
+| ------- | ----------- |
 | `bun run dev` | Start server with hot reload |
 | `bun run build` | Build frontend |
 | `bun run migrate` | Run database migrations |
