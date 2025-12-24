@@ -101,6 +101,10 @@ DISABLE_PAYWALL=true
 
 ## API Endpoints
 
+### Health
+
+- `GET /api/health` - Health check
+
 ### Authentication
 
 - `GET /auth/login` - Initiate Google OAuth
