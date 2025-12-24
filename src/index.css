@@ -1,0 +1,106 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    @apply h-full;
+  }
+  body {
+    @apply h-full bg-gpt-bg text-gpt-text antialiased;
+  }
+  #root {
+    @apply h-full;
+  }
+}
+
+/* ChatGPT-style prose */
+.prose {
+  @apply text-gpt-text leading-7;
+}
+
+.prose p {
+  @apply mb-4 text-base;
+}
+
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4 {
+  @apply font-semibold text-gpt-text mb-3 mt-6;
+}
+
+.prose h1 {
+  @apply text-2xl;
+}
+.prose h2 {
+  @apply text-xl;
+}
+.prose h3 {
+  @apply text-lg;
+}
+
+.prose ul,
+.prose ol {
+  @apply mb-4 pl-6 space-y-1;
+}
+
+.prose ul {
+  @apply list-disc;
+}
+.prose ol {
+  @apply list-decimal;
+}
+
+.prose li {
+  @apply text-base;
+}
+
+.prose a {
+  @apply text-gpt-accent underline;
+}
+
+.prose blockquote {
+  @apply border-l-2 border-gpt-border pl-4 italic my-4 text-gpt-muted;
+}
+
+.prose strong {
+  @apply font-semibold;
+}
+
+.prose code {
+  @apply bg-gpt-input px-1.5 py-0.5 rounded text-sm font-mono;
+}
+
+.prose pre {
+  @apply bg-black rounded-lg overflow-hidden my-4;
+}
+
+.prose table {
+  @apply w-full border-collapse my-4;
+}
+
+.prose th {
+  @apply bg-gpt-input text-gpt-text p-3 text-left text-sm font-medium;
+}
+
+.prose td {
+  @apply p-3 border-t border-gpt-border text-sm;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-gpt-border rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-gpt-muted;
+}
