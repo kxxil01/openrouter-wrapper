@@ -163,7 +163,8 @@ export async function validateSession(token: string): Promise<User | null> {
       u.id, u.google_id, u.email, u.name, u.picture, u.locale, u.hd, 
       u.subscription_status, u.subscription_expires_at, u.message_count, u.message_count_reset_at,
       u.created_at, u.updated_at, u.last_login_at,
-      u.user_type, u.subscription_tier, u.subscription_scope
+      u.user_type, u.subscription_tier, u.subscription_scope,
+      u.stripe_customer_id, u.stripe_subscription_id, u.openrouter_api_key, u.total_tokens_used
     FROM sessions s
     JOIN users u ON s.user_id = u.id
     WHERE s.token_hash = ${tokenHash} AND s.expires_at > NOW()
@@ -192,6 +193,10 @@ export async function validateSession(token: string): Promise<User | null> {
     user_type: row.user_type || 'user',
     subscription_tier: row.subscription_tier || 'free',
     subscription_scope: row.subscription_scope || 'individual',
+    stripe_customer_id: row.stripe_customer_id,
+    stripe_subscription_id: row.stripe_subscription_id,
+    openrouter_api_key: row.openrouter_api_key,
+    total_tokens_used: row.total_tokens_used || 0,
   };
 }
 
