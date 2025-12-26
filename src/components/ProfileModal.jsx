@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import * as api from '../lib/api';
+import PricingModal from './PricingModal';
 
 function ProfileModal({ isOpen, onClose }) {
+  const [showPricing, setShowPricing] = useState(false);
   const [activeTab, setActiveTab] = useState('profile');
   const [profile, setProfile] = useState(null);
   const [stats, setStats] = useState(null);
@@ -369,21 +371,44 @@ function ProfileModal({ isOpen, onClose }) {
             <section>
               <h3 className="text-sm font-medium text-gpt-muted mb-3">Subscription</h3>
               <div className="p-4 bg-gradient-to-r from-purple-600/20 to-blue-600/20 border border-purple-500/30 rounded-lg">
-                <p className="text-sm text-gpt-text mb-2">
-                  {profile?.subscription_status === 'active'
-                    ? 'You have an active subscription. Enjoy unlimited messages!'
-                    : 'Upgrade to Pro for unlimited messages and priority support.'}
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-gpt-text font-medium">
+                    {profile?.subscription_tier === 'pro' ? (
+                      <>
+                        Pro{' '}
+                        {profile?.subscription_scope === 'individual'
+                          ? 'Individual'
+                          : profile?.subscription_scope === 'team'
+                            ? 'Team'
+                            : 'Organization'}
+                      </>
+                    ) : (
+                      'Free Plan'
+                    )}
+                  </span>
+                  {profile?.subscription_tier === 'pro' && (
+                    <span className="px-2 py-0.5 bg-green-500/20 text-green-400 text-xs rounded-full">
+                      Active
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-gpt-muted mb-3">
+                  {profile?.subscription_tier === 'pro'
+                    ? 'Enjoy unlimited messages, all AI models, and premium features!'
+                    : 'Upgrade to Pro for unlimited messages and premium features.'}
                 </p>
-                {profile?.subscription_status !== 'active' && (
-                  <button className="px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white text-sm font-medium rounded-lg hover:from-purple-700 hover:to-blue-700 transition-colors">
-                    Upgrade to Pro - $10/month
-                  </button>
-                )}
+                <button
+                  onClick={() => setShowPricing(true)}
+                  className="px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white text-sm font-medium rounded-lg hover:from-purple-700 hover:to-blue-700 transition-colors"
+                >
+                  {profile?.subscription_tier === 'pro' ? 'Manage Subscription' : 'Upgrade to Pro'}
+                </button>
               </div>
             </section>
           </div>
         )}
       </div>
+      <PricingModal isOpen={showPricing} onClose={() => setShowPricing(false)} user={profile} />
     </div>
   );
 }
