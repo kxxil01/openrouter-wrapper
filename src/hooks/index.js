@@ -4,3 +4,4 @@ export { useMessages } from './useMessages';
 export { useAuth } from './useAuth';
 export { useChat } from './useChat';
 export { useKeyboardShortcuts } from './useKeyboardShortcuts';
+export { useFolders } from './useFolders';

@@ -10,6 +10,8 @@ import chatRoutes from './routes/chat';
 import preferenceRoutes from './routes/preferences';
 import searchRoutes from './routes/search';
 import modelRoutes from './routes/models';
+import folderRoutes from './routes/folders';
+import shareRoutes from './routes/share';
 
 const app = new Hono();
 
@@ -45,6 +47,8 @@ app.route('/api/chat', chatRoutes);
 app.route('/api/preferences', preferenceRoutes);
 app.route('/api/search', searchRoutes);
 app.route('/api/models', modelRoutes);
+app.route('/api/folders', folderRoutes);
+app.route('/api', shareRoutes);
 
 const distPath = join(import.meta.dir, '../dist');
 

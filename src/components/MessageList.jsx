@@ -173,6 +173,41 @@ function MessageList({ messages, onEditMessage, onRegenerateResponse }) {
                         </button>
                       </div>
                       <div className="rounded-2xl px-4 py-3 bg-blue-600 text-white">
+                        {message.images && message.images.length > 0 && (
+                          <div className="flex gap-2 mb-2 flex-wrap">
+                            {message.images.map((img, imgIdx) => (
+                              <img
+                                key={imgIdx}
+                                src={img.data}
+                                alt={img.name || `Image ${imgIdx + 1}`}
+                                className="max-h-48 rounded-lg border border-white/20"
+                              />
+                            ))}
+                          </div>
+                        )}
+                        {message.files && message.files.length > 0 && (
+                          <div className="flex gap-2 mb-2 flex-wrap">
+                            {message.files.map((file, fileIdx) => (
+                              <div
+                                key={fileIdx}
+                                className="flex items-center gap-2 px-3 py-2 bg-white/10 rounded-lg"
+                              >
+                                <svg
+                                  width="16"
+                                  height="16"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                >
+                                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                                  <polyline points="14 2 14 8 20 8" />
+                                </svg>
+                                <span className="text-sm">{file.name}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                         <div className="text-[15px] leading-relaxed">{message.content}</div>
                       </div>
                     </div>

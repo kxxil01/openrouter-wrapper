@@ -4,6 +4,8 @@ import Sidebar from './components/Sidebar';
 import LandingPage from './components/LandingPage';
 import PaywallModal from './components/PaywallModal';
 import SearchModal from './components/SearchModal';
+import SystemPromptModal from './components/SystemPromptModal';
+import * as api from './lib/api';
 import {
   useModels,
   useConversations,
@@ -11,11 +13,13 @@ import {
   useAuth,
   useChat,
   useKeyboardShortcuts,
+  useFolders,
 } from './hooks';
 
 function App() {
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+  const [showSystemPrompt, setShowSystemPrompt] = useState(false);
 
   const { user, isLoading: isAuthLoading, login, logout } = useAuth();
   const { models, selectedModel, setSelectedModel } = useModels();
@@ -30,6 +34,7 @@ function App() {
     fetchConversations,
   } = useConversations();
   const { messages, setMessages, fetchMessages, clearMessages } = useMessages();
+  const { folders, createFolder, deleteFolder } = useFolders();
 
   const {
     isLoading,
@@ -109,6 +114,33 @@ function App() {
     [handleSelectConversation, fetchMessages]
   );
 
+  const handleSaveSystemPrompt = useCallback(
+    async (systemPrompt) => {
+      if (!currentConversation) return;
+      try {
+        const updated = await api.updateConversation(currentConversation.id, {
+          system_prompt: systemPrompt,
+        });
+        setCurrentConversation(updated);
+      } catch (err) {
+        console.error('Failed to save system prompt:', err);
+      }
+    },
+    [currentConversation, setCurrentConversation]
+  );
+
+  const handleMoveToFolder = useCallback(
+    async (conversationId, folderId) => {
+      try {
+        await api.updateConversation(conversationId, { folder_id: folderId });
+        fetchConversations();
+      } catch (err) {
+        console.error('Failed to move conversation:', err);
+      }
+    },
+    [fetchConversations]
+  );
+
   if (isAuthLoading) {
     return (
       <div className="min-h-screen bg-gpt-bg flex items-center justify-center">
@@ -135,6 +167,11 @@ function App() {
         user={user}
         onLogin={login}
         onLogout={logout}
+        folders={folders}
+        onCreateFolder={createFolder}
+        onDeleteFolder={deleteFolder}
+        onMoveToFolder={handleMoveToFolder}
+        onShareConversation={fetchConversations}
       />
       <ChatInterface
         messages={messages}
@@ -148,12 +185,20 @@ function App() {
         selectedModel={selectedModel}
         availableModels={models}
         onModelSelect={setSelectedModel}
+        hasSystemPrompt={!!currentConversation?.system_prompt}
+        onOpenSystemPrompt={() => setShowSystemPrompt(true)}
       />
       {showPaywall && <PaywallModal onClose={() => setShowPaywall(false)} />}
       <SearchModal
         isOpen={showSearch}
         onClose={() => setShowSearch(false)}
         onSelectConversation={handleSearchSelect}
+      />
+      <SystemPromptModal
+        isOpen={showSystemPrompt}
+        onClose={() => setShowSystemPrompt(false)}
+        currentPrompt={currentConversation?.system_prompt}
+        onSave={handleSaveSystemPrompt}
       />
     </div>
   );

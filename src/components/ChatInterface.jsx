@@ -15,6 +15,8 @@ function ChatInterface({
   selectedModel,
   availableModels,
   onModelSelect,
+  hasSystemPrompt,
+  onOpenSystemPrompt,
 }) {
   const messagesEndRef = useRef(null);
 
@@ -43,12 +45,33 @@ function ChatInterface({
             <path d="M9 3v18" />
           </svg>
         </button>
-        <div className="flex-1 flex items-center justify-center">
+        <div className="flex-1 flex items-center justify-center gap-2">
           <ModelSelector
             models={availableModels}
             selectedModel={selectedModel}
             onModelChange={onModelSelect}
           />
+          <button
+            onClick={onOpenSystemPrompt}
+            className={`p-2 rounded-lg transition-colors ${
+              hasSystemPrompt
+                ? 'text-blue-400 hover:text-blue-300 bg-blue-500/10'
+                : 'text-gpt-muted hover:text-gpt-text hover:bg-gpt-hover'
+            }`}
+            title="System Prompt"
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <path d="M12 20h9" />
+              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+            </svg>
+          </button>
         </div>
         <div className="w-9"></div>
       </div>
