@@ -171,6 +171,7 @@ function App() {
         onCreateFolder={createFolder}
         onDeleteFolder={deleteFolder}
         onMoveToFolder={handleMoveToFolder}
+        onShareConversation={fetchConversations}
       />
       <ChatInterface
         messages={messages}

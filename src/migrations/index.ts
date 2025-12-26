@@ -11,6 +11,7 @@ import * as m008 from './008_cleanup';
 import * as m009 from './009_search_index';
 import * as m010 from './010_system_prompt';
 import * as m011 from './011_folders';
+import * as m012 from './012_shared_conversations';
 
 export interface Migration {
   up: (sql: Sql) => Promise<void>;
@@ -29,4 +30,5 @@ export const migrations: Migration[] = [
   m009,
   m010,
   m011,
+  m012,
 ];

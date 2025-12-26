@@ -17,6 +17,7 @@ function Sidebar({
   onCreateFolder,
   onDeleteFolder,
   onMoveToFolder,
+  onShareConversation,
 }) {
   const [expandedFolders, setExpandedFolders] = useState({});
   const [showNewFolder, setShowNewFolder] = useState(false);
@@ -28,6 +29,25 @@ function Sidebar({
       await api.exportConversation(conversationId, format);
     } catch (error) {
       console.error('Export failed:', error);
+    }
+  };
+
+  const handleShare = async (e, conversation) => {
+    e.stopPropagation();
+    try {
+      if (conversation.is_shared && conversation.share_id) {
+        const shareUrl = `${window.location.origin}/share/${conversation.share_id}`;
+        await navigator.clipboard.writeText(shareUrl);
+        alert('Share link copied to clipboard!');
+      } else {
+        const result = await api.shareConversation(conversation.id);
+        const shareUrl = `${window.location.origin}${result.share_url}`;
+        await navigator.clipboard.writeText(shareUrl);
+        alert('Conversation shared! Link copied to clipboard.');
+        if (onShareConversation) onShareConversation(conversation.id);
+      }
+    } catch (error) {
+      console.error('Share failed:', error);
     }
   };
 
@@ -91,6 +111,28 @@ function Sidebar({
           ))}
         </select>
       )}
+      <button
+        onClick={(e) => handleShare(e, conversation)}
+        className={`opacity-0 group-hover:opacity-100 p-1 transition-opacity ${
+          conversation.is_shared ? 'text-green-400' : 'text-gpt-muted hover:text-green-400'
+        }`}
+        title={conversation.is_shared ? 'Shared - Click to copy link' : 'Share'}
+      >
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+        >
+          <circle cx="18" cy="5" r="3" />
+          <circle cx="6" cy="12" r="3" />
+          <circle cx="18" cy="19" r="3" />
+          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+          <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+        </svg>
+      </button>
       <button
         onClick={(e) => handleExport(e, conversation.id, 'markdown')}
         className="opacity-0 group-hover:opacity-100 p-1 text-gpt-muted hover:text-blue-400 transition-opacity"
