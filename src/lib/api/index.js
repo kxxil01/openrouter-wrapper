@@ -35,4 +35,10 @@ export {
 } from './teams';
 export { getAdminStats, getUsers, getUserDetails, updateUser, getBillingStats } from './admin';
 export { getUserPermissions } from './permissions';
+export {
+  getBillingConfig,
+  createCheckoutSession,
+  createPortalSession,
+  getSubscription,
+} from './billing';
 export { API_BASE_URL } from './config';

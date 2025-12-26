@@ -16,6 +16,7 @@ import profileRoutes from './routes/profile';
 import teamRoutes from './routes/teams';
 import adminRoutes from './routes/admin';
 import permissionRoutes from './routes/permissions';
+import billingRoutes from './routes/billing';
 
 const app = new Hono();
 
@@ -57,6 +58,7 @@ app.route('/api', shareRoutes);
 app.route('/api/teams', teamRoutes);
 app.route('/api/admin', adminRoutes);
 app.route('/api/permissions', permissionRoutes);
+app.route('/api/billing', billingRoutes);
 
 const distPath = join(import.meta.dir, '../dist');
 
