@@ -11,6 +11,33 @@ const DISABLE_PAYWALL = process.env.DISABLE_PAYWALL === 'true';
 const FREE_MESSAGE_LIMIT = 5;
 const TITLE_GENERATION_THRESHOLDS = [1, 3, 5];
 
+interface UsageInfo {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
+async function logUsage(
+  userId: string | null,
+  conversationId: string | null,
+  modelId: string,
+  usage: UsageInfo,
+  usedCustomKey: boolean
+): Promise<void> {
+  if (!userId) return;
+  try {
+    await sql`
+      INSERT INTO usage_logs (user_id, conversation_id, model_id, prompt_tokens, completion_tokens, total_tokens, used_custom_key)
+      VALUES (${userId}, ${conversationId}, ${modelId}, ${usage.promptTokens}, ${usage.completionTokens}, ${usage.totalTokens}, ${usedCustomKey})
+    `;
+    await sql`
+      UPDATE users SET total_tokens_used = COALESCE(total_tokens_used, 0) + ${usage.totalTokens} WHERE id = ${userId}
+    `;
+  } catch (error) {
+    console.error('[Usage] Failed to log usage:', error);
+  }
+}
+
 function getTodayUTC(): string {
   return new Date().toISOString().split('T')[0];
 }
@@ -291,6 +318,20 @@ chatRoutes.post('/completions', async (c) => {
               );
             }
 
+            const promptTokensEstimate = JSON.stringify(apiMessages).length / 4;
+            const completionTokensEstimate = content.length / 4;
+            await logUsage(
+              userId,
+              convId,
+              modelId,
+              {
+                promptTokens: Math.ceil(promptTokensEstimate),
+                completionTokens: Math.ceil(completionTokensEstimate),
+                totalTokens: Math.ceil(promptTokensEstimate + completionTokensEstimate),
+              },
+              !!userApiKey
+            );
+
             console.log(`[${requestId}] Saved assistant response to database`);
           } catch (dbError) {
             console.error(`[${requestId}] Error saving to database:`, dbError);
@@ -369,6 +410,21 @@ chatRoutes.post('/completions', async (c) => {
         } catch (dbError) {
           console.error(`[${requestId}] Error saving to database:`, dbError);
         }
+      }
+
+      const usage = data.usage;
+      if (usage) {
+        await logUsage(
+          userId,
+          conversation_id,
+          modelId,
+          {
+            promptTokens: usage.prompt_tokens || 0,
+            completionTokens: usage.completion_tokens || 0,
+            totalTokens: usage.total_tokens || 0,
+          },
+          !!userApiKey
+        );
       }
 
       return c.json(data);

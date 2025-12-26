@@ -2,9 +2,13 @@ import { useState, useEffect } from 'react';
 import * as api from '../lib/api';
 
 function ProfileModal({ isOpen, onClose }) {
+  const [activeTab, setActiveTab] = useState('profile');
   const [profile, setProfile] = useState(null);
   const [stats, setStats] = useState(null);
+  const [usage, setUsage] = useState(null);
+  const [usagePeriod, setUsagePeriod] = useState('30d');
   const [loading, setLoading] = useState(true);
+  const [usageLoading, setUsageLoading] = useState(false);
   const [apiKey, setApiKey] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -16,6 +20,23 @@ function ProfileModal({ isOpen, onClose }) {
       fetchProfile();
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    async function loadUsage() {
+      setUsageLoading(true);
+      try {
+        const data = await api.getUsageAnalytics(usagePeriod);
+        setUsage(data);
+      } catch {
+        setError('Failed to load usage data');
+      } finally {
+        setUsageLoading(false);
+      }
+    }
+    if (isOpen && activeTab === 'usage') {
+      loadUsage();
+    }
+  }, [isOpen, activeTab, usagePeriod]);
 
   async function fetchProfile() {
     setLoading(true);
@@ -76,7 +97,28 @@ function ProfileModal({ isOpen, onClose }) {
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
       <div className="relative bg-[#2f2f2f] rounded-xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-4 border-b border-gpt-border">
-          <h2 className="text-lg font-semibold text-gpt-text">Profile & Settings</h2>
+          <div className="flex gap-4">
+            <button
+              onClick={() => setActiveTab('profile')}
+              className={`text-sm font-medium pb-1 border-b-2 transition-colors ${
+                activeTab === 'profile'
+                  ? 'text-gpt-text border-blue-500'
+                  : 'text-gpt-muted border-transparent hover:text-gpt-text'
+              }`}
+            >
+              Profile
+            </button>
+            <button
+              onClick={() => setActiveTab('usage')}
+              className={`text-sm font-medium pb-1 border-b-2 transition-colors ${
+                activeTab === 'usage'
+                  ? 'text-gpt-text border-blue-500'
+                  : 'text-gpt-muted border-transparent hover:text-gpt-text'
+              }`}
+            >
+              Usage Analytics
+            </button>
+          </div>
           <button onClick={onClose} className="p-1 text-gpt-muted hover:text-gpt-text">
             <svg
               width="20"
@@ -94,6 +136,105 @@ function ProfileModal({ isOpen, onClose }) {
         {loading ? (
           <div className="p-8 flex justify-center">
             <div className="animate-spin h-8 w-8 border-2 border-gpt-muted border-t-gpt-accent rounded-full" />
+          </div>
+        ) : activeTab === 'usage' ? (
+          <div className="p-4 space-y-6">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-medium text-gpt-muted">Token Usage</h3>
+              <select
+                value={usagePeriod}
+                onChange={(e) => setUsagePeriod(e.target.value)}
+                className="bg-[#3f3f3f] text-gpt-text text-xs px-2 py-1 rounded border border-gpt-border"
+              >
+                <option value="7d">Last 7 days</option>
+                <option value="30d">Last 30 days</option>
+                <option value="90d">Last 90 days</option>
+              </select>
+            </div>
+
+            {usageLoading ? (
+              <div className="flex justify-center py-8">
+                <div className="animate-spin h-6 w-6 border-2 border-gpt-muted border-t-gpt-accent rounded-full" />
+              </div>
+            ) : usage ? (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 bg-[#3f3f3f] rounded-lg">
+                    <p className="text-2xl font-bold text-gpt-text">
+                      {usage.totals.total_tokens.toLocaleString()}
+                    </p>
+                    <p className="text-xs text-gpt-muted">Total Tokens</p>
+                  </div>
+                  <div className="p-3 bg-[#3f3f3f] rounded-lg">
+                    <p className="text-2xl font-bold text-gpt-text">
+                      {usage.totals.total_requests.toLocaleString()}
+                    </p>
+                    <p className="text-xs text-gpt-muted">API Requests</p>
+                  </div>
+                  <div className="p-3 bg-[#3f3f3f] rounded-lg">
+                    <p className="text-2xl font-bold text-blue-400">
+                      {usage.totals.prompt_tokens.toLocaleString()}
+                    </p>
+                    <p className="text-xs text-gpt-muted">Prompt Tokens</p>
+                  </div>
+                  <div className="p-3 bg-[#3f3f3f] rounded-lg">
+                    <p className="text-2xl font-bold text-green-400">
+                      {usage.totals.completion_tokens.toLocaleString()}
+                    </p>
+                    <p className="text-xs text-gpt-muted">Completion Tokens</p>
+                  </div>
+                </div>
+
+                {usage.by_model.length > 0 && (
+                  <section>
+                    <h3 className="text-sm font-medium text-gpt-muted mb-3">Usage by Model</h3>
+                    <div className="space-y-2">
+                      {usage.by_model.map((m) => (
+                        <div
+                          key={m.model_id}
+                          className="flex items-center justify-between p-2 bg-[#3f3f3f] rounded-lg"
+                        >
+                          <span className="text-xs text-gpt-text truncate flex-1">
+                            {m.model_id.split('/').pop()}
+                          </span>
+                          <span className="text-xs text-gpt-muted ml-2">
+                            {m.tokens.toLocaleString()} tokens
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {usage.recent_logs.length > 0 && (
+                  <section>
+                    <h3 className="text-sm font-medium text-gpt-muted mb-3">Recent Activity</h3>
+                    <div className="space-y-1 max-h-48 overflow-y-auto">
+                      {usage.recent_logs.slice(0, 10).map((log) => (
+                        <div
+                          key={log.id}
+                          className="flex items-center justify-between p-2 bg-[#3f3f3f] rounded text-xs"
+                        >
+                          <span className="text-gpt-muted truncate flex-1">
+                            {log.model_id.split('/').pop()}
+                          </span>
+                          <span className="text-gpt-text ml-2">
+                            {log.total_tokens.toLocaleString()}
+                          </span>
+                          {log.used_custom_key && (
+                            <span className="ml-1 text-green-400" title="Used custom API key">
+                              ●
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )}
+              </>
+            ) : (
+              <p className="text-center text-gpt-muted py-8">No usage data available</p>
+            )}
           </div>
         ) : (
           <div className="p-4 space-y-6">

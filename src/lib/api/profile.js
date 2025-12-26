@@ -34,3 +34,13 @@ export async function removeApiKey() {
   }
   return response.json();
 }
+
+export async function getUsageAnalytics(period = '30d') {
+  const response = await fetch(`${API_BASE_URL}/profile/usage?period=${period}`, {
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    throw new Error('Failed to fetch usage analytics');
+  }
+  return response.json();
+}
