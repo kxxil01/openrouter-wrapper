@@ -13,6 +13,7 @@ import {
   useAuth,
   useChat,
   useKeyboardShortcuts,
+  useFolders,
 } from './hooks';
 
 function App() {
@@ -33,6 +34,7 @@ function App() {
     fetchConversations,
   } = useConversations();
   const { messages, setMessages, fetchMessages, clearMessages } = useMessages();
+  const { folders, createFolder, deleteFolder } = useFolders();
 
   const {
     isLoading,
@@ -127,6 +129,18 @@ function App() {
     [currentConversation, setCurrentConversation]
   );
 
+  const handleMoveToFolder = useCallback(
+    async (conversationId, folderId) => {
+      try {
+        await api.updateConversation(conversationId, { folder_id: folderId });
+        fetchConversations();
+      } catch (err) {
+        console.error('Failed to move conversation:', err);
+      }
+    },
+    [fetchConversations]
+  );
+
   if (isAuthLoading) {
     return (
       <div className="min-h-screen bg-gpt-bg flex items-center justify-center">
@@ -153,6 +167,10 @@ function App() {
         user={user}
         onLogin={login}
         onLogout={logout}
+        folders={folders}
+        onCreateFolder={createFolder}
+        onDeleteFolder={deleteFolder}
+        onMoveToFolder={handleMoveToFolder}
       />
       <ChatInterface
         messages={messages}
