@@ -39,6 +39,8 @@ export interface User {
   openrouter_api_key?: string;
   total_tokens_used?: number;
   user_type: 'user' | 'admin' | 'superadmin';
+  subscription_tier: 'free' | 'pro';
+  subscription_scope: 'individual' | 'team' | 'organization';
 }
 
 export interface Session {
@@ -187,6 +189,8 @@ export async function validateSession(token: string): Promise<User | null> {
     updated_at: row.updated_at,
     last_login_at: row.last_login_at,
     user_type: row.user_type || 'user',
+    subscription_tier: row.subscription_tier || 'free',
+    subscription_scope: row.subscription_scope || 'individual',
   };
 }
 
