@@ -14,6 +14,7 @@ import folderRoutes from './routes/folders';
 import shareRoutes from './routes/share';
 import profileRoutes from './routes/profile';
 import teamRoutes from './routes/teams';
+import adminRoutes from './routes/admin';
 
 const app = new Hono();
 
@@ -53,6 +54,7 @@ app.route('/api/folders', folderRoutes);
 app.route('/api/profile', profileRoutes);
 app.route('/api', shareRoutes);
 app.route('/api/teams', teamRoutes);
+app.route('/api/admin', adminRoutes);
 
 const distPath = join(import.meta.dir, '../dist');
 

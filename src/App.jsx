@@ -8,6 +8,7 @@ import SystemPromptModal from './components/SystemPromptModal';
 import SharedConversation from './components/SharedConversation';
 import ProfileModal from './components/ProfileModal';
 import TeamModal from './components/TeamModal';
+import AdminDashboard from './components/AdminDashboard';
 import * as api from './lib/api';
 import {
   useModels,
@@ -26,6 +27,7 @@ function App() {
   const [showProfile, setShowProfile] = useState(false);
   const [showTeams, setShowTeams] = useState(false);
   const [activeTeam, setActiveTeam] = useState(null);
+  const [showAdmin, setShowAdmin] = useState(false);
 
   const { user, isLoading: isAuthLoading, login, logout } = useAuth();
   const { models, selectedModel, setSelectedModel } = useModels();
@@ -186,6 +188,7 @@ function App() {
         onOpenProfile={() => setShowProfile(true)}
         onOpenTeams={() => setShowTeams(true)}
         activeTeam={activeTeam}
+        onOpenAdmin={() => setShowAdmin(true)}
       />
       <ChatInterface
         messages={messages}
@@ -220,6 +223,7 @@ function App() {
         onClose={() => setShowTeams(false)}
         onTeamSelect={setActiveTeam}
       />
+      <AdminDashboard isOpen={showAdmin} onClose={() => setShowAdmin(false)} />
     </div>
   );
 }

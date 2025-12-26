@@ -33,4 +33,5 @@ export {
   shareConversationWithTeam,
   removeConversationFromTeam,
 } from './teams';
+export { getAdminStats, getUsers, getUserDetails, updateUser, getBillingStats } from './admin';
 export { API_BASE_URL } from './config';
