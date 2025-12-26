@@ -5,6 +5,7 @@ import LandingPage from './components/LandingPage';
 import PaywallModal from './components/PaywallModal';
 import SearchModal from './components/SearchModal';
 import SystemPromptModal from './components/SystemPromptModal';
+import SharedConversation from './components/SharedConversation';
 import * as api from './lib/api';
 import {
   useModels,
@@ -140,6 +141,11 @@ function App() {
     },
     [fetchConversations]
   );
+
+  const shareMatch = window.location.pathname.match(/^\/share\/([a-zA-Z0-9]+)$/);
+  if (shareMatch) {
+    return <SharedConversation shareId={shareMatch[1]} />;
+  }
 
   if (isAuthLoading) {
     return (
