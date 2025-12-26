@@ -27,6 +27,9 @@ profileRoutes.get('/', async (c) => {
         (SELECT COUNT(*) FROM messages WHERE conversation_id IN (SELECT id FROM conversations WHERE user_id = ${user.id}) AND role = 'assistant') as assistant_messages
     `;
 
+    const isSuperAdmin = user.user_type === 'superadmin';
+    const bypassPaywall = isSuperAdmin || DISABLE_PAYWALL;
+
     return c.json({
       user: {
         id: user.id,
@@ -34,14 +37,14 @@ profileRoutes.get('/', async (c) => {
         name: user.name,
         picture: user.picture,
         created_at: user.created_at,
-        subscription_status: DISABLE_PAYWALL ? 'active' : user.subscription_status,
-        subscription_tier: DISABLE_PAYWALL ? 'pro' : user.subscription_tier,
-        subscription_scope: user.subscription_scope,
+        subscription_status: bypassPaywall ? 'active' : user.subscription_status,
+        subscription_tier: bypassPaywall ? 'pro' : user.subscription_tier,
+        subscription_scope: isSuperAdmin ? 'organization' : user.subscription_scope,
         subscription_expires_at: user.subscription_expires_at,
         user_type: user.user_type,
         message_count: user.message_count || 0,
         message_count_reset_at: user.message_count_reset_at,
-        free_messages_remaining: Math.max(0, 5 - (user.message_count || 0)),
+        free_messages_remaining: bypassPaywall ? 999 : Math.max(0, 5 - (user.message_count || 0)),
         total_tokens_used: user.total_tokens_used || 0,
         has_custom_api_key: !!user.openrouter_api_key,
       },
@@ -51,7 +54,7 @@ profileRoutes.get('/', async (c) => {
         user_messages: parseInt(stats.user_messages) || 0,
         assistant_messages: parseInt(stats.assistant_messages) || 0,
       },
-      paywall_disabled: DISABLE_PAYWALL,
+      paywall_disabled: bypassPaywall,
     });
   } catch (error) {
     console.error('Error fetching profile:', error);

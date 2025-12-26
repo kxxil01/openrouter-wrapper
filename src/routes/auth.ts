@@ -71,18 +71,24 @@ authRoutes.get('/me', async (c) => {
     return c.json({ user: null });
   }
 
+  const isSuperAdmin = user.user_type === 'superadmin';
+  const bypassPaywall = isSuperAdmin || DISABLE_PAYWALL;
+
   return c.json({
     user: {
       id: user.id,
       email: user.email,
       name: user.name,
       picture: user.picture,
-      subscription_status: DISABLE_PAYWALL ? 'active' : user.subscription_status,
+      user_type: user.user_type,
+      subscription_status: bypassPaywall ? 'active' : user.subscription_status,
+      subscription_tier: bypassPaywall ? 'pro' : user.subscription_tier,
+      subscription_scope: isSuperAdmin ? 'organization' : user.subscription_scope,
       subscription_expires_at: user.subscription_expires_at,
       message_count: user.message_count || 0,
-      free_messages_remaining: Math.max(0, 5 - (user.message_count || 0)),
+      free_messages_remaining: bypassPaywall ? 999 : Math.max(0, 5 - (user.message_count || 0)),
     },
-    paywall_disabled: DISABLE_PAYWALL,
+    paywall_disabled: bypassPaywall,
   });
 });
 

@@ -175,12 +175,15 @@ chatRoutes.post('/completions', async (c) => {
   let messageCount: number = 0;
   let userApiKey: string | null = null;
 
+  let isSuperAdmin = false;
+
   if (sessionToken) {
     const user = await auth.validateSession(sessionToken);
     if (user) {
       userId = user.id;
       subscriptionStatus = user.subscription_status || 'free';
       userApiKey = user.openrouter_api_key || null;
+      isSuperAdmin = user.user_type === 'superadmin';
 
       const todayUTC = getTodayUTC();
       const resetDate = user.message_count_reset_at
@@ -196,8 +199,10 @@ chatRoutes.post('/completions', async (c) => {
     }
   }
 
+  const bypassPaywall = isSuperAdmin || DISABLE_PAYWALL;
+
   if (
-    !DISABLE_PAYWALL &&
+    !bypassPaywall &&
     !userApiKey &&
     subscriptionStatus !== 'active' &&
     messageCount >= FREE_MESSAGE_LIMIT
