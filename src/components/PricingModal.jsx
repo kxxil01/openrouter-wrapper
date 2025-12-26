@@ -60,9 +60,12 @@ export default function PricingModal({ isOpen, onClose, user }) {
   const handleSubscribe = async (planId) => {
     setLoading(planId);
     try {
-      const { url } = await api.createCheckoutSession(planId, interval);
-      if (url) {
-        window.location.href = url;
+      const response = await api.createCheckoutSession(planId, interval);
+      if (response.url) {
+        window.location.href = response.url;
+      } else if (response.error) {
+        console.error('Checkout error:', response);
+        alert(`Failed to start checkout: ${response.details || response.error}`);
       }
     } catch (error) {
       console.error('Failed to create checkout session:', error);

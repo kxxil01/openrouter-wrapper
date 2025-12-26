@@ -104,7 +104,8 @@ billingRoutes.post('/create-checkout-session', async (c) => {
     return c.json({ sessionId: session.id, url: session.url });
   } catch (error) {
     console.error('Error creating checkout session:', error);
-    return c.json({ error: 'Failed to create checkout session' }, 500);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return c.json({ error: 'Failed to create checkout session', details: errorMessage }, 500);
   }
 });
 

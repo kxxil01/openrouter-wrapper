@@ -373,7 +373,9 @@ function ProfileModal({ isOpen, onClose }) {
               <div className="p-4 bg-gradient-to-r from-purple-600/20 to-blue-600/20 border border-purple-500/30 rounded-lg">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-gpt-text font-medium">
-                    {profile?.subscription_tier === 'pro' ? (
+                    {profile?.user_type === 'superadmin' ? (
+                      'Super Admin'
+                    ) : profile?.subscription_tier === 'pro' ? (
                       <>
                         Pro{' '}
                         {profile?.subscription_scope === 'individual'
@@ -386,23 +388,30 @@ function ProfileModal({ isOpen, onClose }) {
                       'Free Plan'
                     )}
                   </span>
-                  {profile?.subscription_tier === 'pro' && (
+                  {(profile?.user_type === 'superadmin' ||
+                    profile?.subscription_tier === 'pro') && (
                     <span className="px-2 py-0.5 bg-green-500/20 text-green-400 text-xs rounded-full">
-                      Active
+                      {profile?.user_type === 'superadmin' ? 'Unlimited' : 'Active'}
                     </span>
                   )}
                 </div>
                 <p className="text-sm text-gpt-muted mb-3">
-                  {profile?.subscription_tier === 'pro'
-                    ? 'Enjoy unlimited messages, all AI models, and premium features!'
-                    : 'Upgrade to Pro for unlimited messages and premium features.'}
+                  {profile?.user_type === 'superadmin'
+                    ? 'You have full access to all features as a Super Admin.'
+                    : profile?.subscription_tier === 'pro'
+                      ? 'Enjoy unlimited messages, all AI models, and premium features!'
+                      : 'Upgrade to Pro for unlimited messages and premium features.'}
                 </p>
-                <button
-                  onClick={() => setShowPricing(true)}
-                  className="px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white text-sm font-medium rounded-lg hover:from-purple-700 hover:to-blue-700 transition-colors"
-                >
-                  {profile?.subscription_tier === 'pro' ? 'Manage Subscription' : 'Upgrade to Pro'}
-                </button>
+                {profile?.user_type !== 'superadmin' && (
+                  <button
+                    onClick={() => setShowPricing(true)}
+                    className="px-4 py-2 bg-gradient-to-r from-purple-600 to-blue-600 text-white text-sm font-medium rounded-lg hover:from-purple-700 hover:to-blue-700 transition-colors"
+                  >
+                    {profile?.subscription_tier === 'pro'
+                      ? 'Manage Subscription'
+                      : 'Upgrade to Pro'}
+                  </button>
+                )}
               </div>
             </section>
           </div>
