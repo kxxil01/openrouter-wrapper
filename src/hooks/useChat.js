@@ -66,8 +66,8 @@ export function useChat({
   }, []);
 
   const sendMessage = useCallback(
-    async (content) => {
-      if (!content.trim()) return;
+    async (content, images = []) => {
+      if (!content.trim() && images.length === 0) return;
       setError(null);
       setIsLoading(true);
 
@@ -89,26 +89,38 @@ export function useChat({
             id: uuidv7(),
             role: 'user',
             content,
+            images: images.length > 0 ? images : undefined,
             conversation_id: conversationId,
             created_at: new Date().toISOString(),
           };
           setMessages([userMessage]);
           localMessages = [userMessage];
 
-          const savedMessage = await api.saveMessage(conversationId, 'user', content);
+          const savedMessage = await api.saveMessage(conversationId, 'user', content, images);
           setMessages([savedMessage]);
           localMessages = [savedMessage];
           await fetchConversations();
         } else {
-          const savedMessage = await api.saveMessage(conversationId, 'user', content);
+          const savedMessage = await api.saveMessage(conversationId, 'user', content, images);
           localMessages = [...localMessages, savedMessage];
           setMessages(localMessages);
         }
 
-        const apiMessages = localMessages.map((msg) => ({
-          role: msg.role,
-          content: msg.content,
-        }));
+        const apiMessages = localMessages.map((msg) => {
+          if (msg.images && msg.images.length > 0) {
+            return {
+              role: msg.role,
+              content: [
+                { type: 'text', text: msg.content || '' },
+                ...msg.images.map((img) => ({
+                  type: 'image_url',
+                  image_url: { url: img.data },
+                })),
+              ],
+            };
+          }
+          return { role: msg.role, content: msg.content };
+        });
 
         setMessages([...localMessages, { role: 'assistant', content: '', isStreaming: true }]);
         streamingContentRef.current = '';

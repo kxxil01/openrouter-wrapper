@@ -173,6 +173,18 @@ function MessageList({ messages, onEditMessage, onRegenerateResponse }) {
                         </button>
                       </div>
                       <div className="rounded-2xl px-4 py-3 bg-blue-600 text-white">
+                        {message.images && message.images.length > 0 && (
+                          <div className="flex gap-2 mb-2 flex-wrap">
+                            {message.images.map((img, imgIdx) => (
+                              <img
+                                key={imgIdx}
+                                src={img.data}
+                                alt={img.name || `Image ${imgIdx + 1}`}
+                                className="max-h-48 rounded-lg border border-white/20"
+                              />
+                            ))}
+                          </div>
+                        )}
                         <div className="text-[15px] leading-relaxed">{message.content}</div>
                       </div>
                     </div>
