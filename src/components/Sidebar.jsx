@@ -22,6 +22,8 @@ function Sidebar({
   const [expandedFolders, setExpandedFolders] = useState({});
   const [showNewFolder, setShowNewFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
+  const [openMenuId, setOpenMenuId] = useState(null);
+  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
 
   const handleExport = async (e, conversationId, format) => {
     e.stopPropagation();
@@ -70,106 +72,149 @@ function Sidebar({
   const getConversationsInFolder = (folderId) =>
     conversations.filter((c) => c.folder_id === folderId);
 
-  const renderConversation = (conversation) => (
-    <div
-      key={conversation.id}
-      className={`group flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer text-sm ${
-        currentConversationId === conversation.id
-          ? 'bg-gpt-hover text-gpt-text'
-          : 'text-gpt-muted hover:bg-gpt-hover hover:text-gpt-text'
-      }`}
-      onClick={() => onSelectConversation(conversation.id)}
-    >
-      <svg
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        className="shrink-0"
-      >
-        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-      </svg>
-      <span className="flex-1 truncate">{conversation.title}</span>
-      {folders.length > 0 && (
-        <select
-          onClick={(e) => e.stopPropagation()}
-          onChange={(e) => {
-            e.stopPropagation();
-            onMoveToFolder(conversation.id, e.target.value || null);
-          }}
-          value={conversation.folder_id || ''}
-          className="opacity-0 group-hover:opacity-100 w-6 h-6 bg-transparent text-xs cursor-pointer"
-          title="Move to folder"
-        >
-          <option value="">No folder</option>
-          {folders.map((f) => (
-            <option key={f.id} value={f.id}>
-              {f.name}
-            </option>
-          ))}
-        </select>
-      )}
-      <button
-        onClick={(e) => handleShare(e, conversation)}
-        className={`opacity-0 group-hover:opacity-100 p-1 transition-opacity ${
-          conversation.is_shared ? 'text-green-400' : 'text-gpt-muted hover:text-green-400'
+  const renderConversation = (conversation) => {
+    const isMenuOpen = openMenuId === conversation.id;
+    return (
+      <div
+        key={conversation.id}
+        className={`group relative flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer text-sm ${
+          currentConversationId === conversation.id
+            ? 'bg-gpt-hover text-gpt-text'
+            : 'text-gpt-muted hover:bg-gpt-hover hover:text-gpt-text'
         }`}
-        title={conversation.is_shared ? 'Shared - Click to copy link' : 'Share'}
+        onClick={() => onSelectConversation(conversation.id)}
       >
         <svg
-          width="14"
-          height="14"
+          width="16"
+          height="16"
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
           strokeWidth="2"
+          className="shrink-0"
         >
-          <circle cx="18" cy="5" r="3" />
-          <circle cx="6" cy="12" r="3" />
-          <circle cx="18" cy="19" r="3" />
-          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
-          <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
         </svg>
-      </button>
-      <button
-        onClick={(e) => handleExport(e, conversation.id, 'markdown')}
-        className="opacity-0 group-hover:opacity-100 p-1 text-gpt-muted hover:text-blue-400 transition-opacity"
-        title="Export as Markdown"
-      >
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
+        <span className="flex-1 truncate">{conversation.title}</span>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!isMenuOpen) {
+              const rect = e.currentTarget.getBoundingClientRect();
+              setMenuPosition({ top: rect.bottom + 4, left: rect.right - 112 });
+            }
+            setOpenMenuId(isMenuOpen ? null : conversation.id);
+          }}
+          className={`${isMenuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} p-1 text-gpt-muted hover:text-gpt-text transition-opacity`}
+          title="More options"
         >
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
-        </svg>
-      </button>
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          onDeleteConversation(conversation.id);
-        }}
-        className="opacity-0 group-hover:opacity-100 p-1 text-gpt-muted hover:text-red-400 transition-opacity"
-        title="Delete"
-      >
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-        >
-          <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-        </svg>
-      </button>
-    </div>
-  );
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+            <circle cx="12" cy="5" r="2" />
+            <circle cx="12" cy="12" r="2" />
+            <circle cx="12" cy="19" r="2" />
+          </svg>
+        </button>
+        {isMenuOpen && (
+          <>
+            <div
+              className="fixed inset-0 z-40"
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpenMenuId(null);
+              }}
+            />
+            <div
+              className="fixed z-50 w-28 bg-[#2f2f2f] border border-gpt-border rounded-md shadow-lg py-1"
+              style={{ top: menuPosition.top, left: menuPosition.left }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {folders.length > 0 && (
+                <div className="px-2 py-1 border-b border-gpt-border">
+                  <select
+                    onChange={(e) => {
+                      onMoveToFolder(conversation.id, e.target.value || null);
+                      setOpenMenuId(null);
+                    }}
+                    value={conversation.folder_id || ''}
+                    className="w-full bg-[#3f3f3f] text-gpt-text text-xs px-1 py-0.5 rounded border border-gpt-border cursor-pointer"
+                  >
+                    <option value="">No folder</option>
+                    {folders.map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <button
+                onClick={(e) => {
+                  handleShare(e, conversation);
+                  setOpenMenuId(null);
+                }}
+                className="w-full flex items-center gap-2 px-2 py-1 text-xs text-gpt-muted hover:bg-[#3f3f3f] hover:text-gpt-text"
+              >
+                <svg
+                  width="11"
+                  height="11"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <circle cx="18" cy="5" r="3" />
+                  <circle cx="6" cy="12" r="3" />
+                  <circle cx="18" cy="19" r="3" />
+                  <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                  <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+                </svg>
+                {conversation.is_shared ? 'Copy' : 'Share'}
+              </button>
+              <button
+                onClick={(e) => {
+                  handleExport(e, conversation.id, 'markdown');
+                  setOpenMenuId(null);
+                }}
+                className="w-full flex items-center gap-2 px-2 py-1 text-xs text-gpt-muted hover:bg-[#3f3f3f] hover:text-gpt-text"
+              >
+                <svg
+                  width="11"
+                  height="11"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+                </svg>
+                Export
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteConversation(conversation.id);
+                  setOpenMenuId(null);
+                }}
+                className="w-full flex items-center gap-2 px-2 py-1 text-xs text-red-400 hover:bg-[#3f3f3f]"
+              >
+                <svg
+                  width="11"
+                  height="11"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                </svg>
+                Delete
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  };
 
   return (
     <aside
@@ -204,6 +249,69 @@ function Sidebar({
             <div className="text-center py-8 text-gpt-muted text-sm">No conversations yet</div>
           ) : (
             <div className="space-y-1">
+              {showNewFolder ? (
+                <div className="flex items-center gap-2 px-3 py-2">
+                  <input
+                    type="text"
+                    value={newFolderName}
+                    onChange={(e) => setNewFolderName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleCreateFolder();
+                      if (e.key === 'Escape') setShowNewFolder(false);
+                    }}
+                    placeholder="Folder name"
+                    className="flex-1 bg-gpt-hover text-gpt-text text-sm px-2 py-1 rounded border border-gpt-border focus:outline-none focus:border-blue-500"
+                    autoFocus
+                  />
+                  <button
+                    onClick={handleCreateFolder}
+                    className="p-1 text-green-500 hover:text-green-400"
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <path d="M20 6L9 17l-5-5" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => setShowNewFolder(false)}
+                    className="p-1 text-gpt-muted hover:text-red-400"
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <path d="M18 6L6 18M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowNewFolder(true)}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gpt-muted hover:text-gpt-text hover:bg-gpt-hover rounded-lg transition-colors"
+                >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                  New folder
+                </button>
+              )}
               {folders.map((folder) => {
                 const folderConvs = getConversationsInFolder(folder.id);
                 const isExpanded = expandedFolders[folder.id] !== false;
@@ -263,70 +371,6 @@ function Sidebar({
                   </div>
                 );
               })}
-
-              {showNewFolder ? (
-                <div className="flex items-center gap-2 px-3 py-2">
-                  <input
-                    type="text"
-                    value={newFolderName}
-                    onChange={(e) => setNewFolderName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleCreateFolder();
-                      if (e.key === 'Escape') setShowNewFolder(false);
-                    }}
-                    placeholder="Folder name"
-                    className="flex-1 bg-gpt-hover text-gpt-text text-sm px-2 py-1 rounded border border-gpt-border focus:outline-none focus:border-blue-500"
-                    autoFocus
-                  />
-                  <button
-                    onClick={handleCreateFolder}
-                    className="text-green-400 hover:text-green-300"
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                    >
-                      <path d="M20 6L9 17l-5-5" />
-                    </svg>
-                  </button>
-                  <button
-                    onClick={() => setShowNewFolder(false)}
-                    className="text-red-400 hover:text-red-300"
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                    >
-                      <path d="M18 6L6 18M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => setShowNewFolder(true)}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-gpt-muted hover:text-gpt-text hover:bg-gpt-hover rounded-lg transition-colors"
-                >
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                  >
-                    <path d="M12 5v14M5 12h14" />
-                  </svg>
-                  New folder
-                </button>
-              )}
 
               {unfolderedConversations.length > 0 && (
                 <div className="pt-2 border-t border-gpt-border/30 mt-2">

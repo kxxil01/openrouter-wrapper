@@ -37,6 +37,7 @@ export async function updateConversation(id, updates) {
   const response = await fetch(`${API_BASE_URL}/conversations/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify(updates),
   });
 

@@ -54,12 +54,12 @@
 - [x] **Message editing** - Edit sent messages and regenerate response
 - [x] **Regenerate response** - Re-run last assistant response
 
-### Phase 2: Advanced Features
-- [ ] **System prompts** - Custom instructions per conversation
-- [ ] **Conversation folders** - Organize chats into categories
-- [ ] **Shared conversations** - Public links to share chats
-- [ ] **Image upload** - Vision model support (GPT-4V, Claude 3)
-- [ ] **File attachments** - PDF/document analysis
+### Phase 2: Advanced Features ✅
+- [x] **System prompts** - Custom instructions per conversation
+- [x] **Conversation folders** - Organize chats into categories
+- [x] **Shared conversations** - Public links to share chats
+- [x] **Image upload** - Vision model support (GPT-4V, Claude 3)
+- [x] **File attachments** - PDF/document analysis
 
 ### Phase 3: Collaboration
 - [ ] **Team workspaces** - Shared conversations within organization
@@ -148,4 +148,4 @@ src/
 
 ---
 
-*Last updated: December 25, 2024*
+*Last updated: December 26, 2024*

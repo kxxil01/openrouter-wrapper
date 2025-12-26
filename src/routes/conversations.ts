@@ -82,13 +82,14 @@ conversationRoutes.put('/:id', async (c) => {
   try {
     const id = c.req.param('id');
     const body = await c.req.json();
-    const { title, system_prompt } = body;
+    const { title, system_prompt, folder_id } = body;
 
     const [conversation] = await sql`
       UPDATE conversations 
       SET 
         title = COALESCE(${title ?? null}, title),
         system_prompt = ${system_prompt ?? null},
+        folder_id = ${folder_id === undefined ? sql`folder_id` : folder_id},
         updated_at = NOW()
       WHERE id = ${id} AND user_id = ${user.id}
       RETURNING *
