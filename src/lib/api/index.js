@@ -20,4 +20,17 @@ export { searchConversations } from './search';
 export { getFolders, createFolder, updateFolder, deleteFolder } from './folders';
 export { shareConversation, unshareConversation, getSharedConversation } from './share';
 export { getProfile, updateApiKey, removeApiKey, getUsageAnalytics } from './profile';
+export {
+  getTeams,
+  createTeam,
+  getTeam,
+  updateTeam,
+  deleteTeam,
+  inviteToTeam,
+  joinTeam,
+  removeMember,
+  getTeamConversations,
+  shareConversationWithTeam,
+  removeConversationFromTeam,
+} from './teams';
 export { API_BASE_URL } from './config';

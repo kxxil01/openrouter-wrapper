@@ -7,6 +7,7 @@ import SearchModal from './components/SearchModal';
 import SystemPromptModal from './components/SystemPromptModal';
 import SharedConversation from './components/SharedConversation';
 import ProfileModal from './components/ProfileModal';
+import TeamModal from './components/TeamModal';
 import * as api from './lib/api';
 import {
   useModels,
@@ -23,6 +24,8 @@ function App() {
   const [showSearch, setShowSearch] = useState(false);
   const [showSystemPrompt, setShowSystemPrompt] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [showTeams, setShowTeams] = useState(false);
+  const [activeTeam, setActiveTeam] = useState(null);
 
   const { user, isLoading: isAuthLoading, login, logout } = useAuth();
   const { models, selectedModel, setSelectedModel } = useModels();
@@ -181,6 +184,8 @@ function App() {
         onMoveToFolder={handleMoveToFolder}
         onShareConversation={fetchConversations}
         onOpenProfile={() => setShowProfile(true)}
+        onOpenTeams={() => setShowTeams(true)}
+        activeTeam={activeTeam}
       />
       <ChatInterface
         messages={messages}
@@ -210,6 +215,11 @@ function App() {
         onSave={handleSaveSystemPrompt}
       />
       <ProfileModal isOpen={showProfile} onClose={() => setShowProfile(false)} />
+      <TeamModal
+        isOpen={showTeams}
+        onClose={() => setShowTeams(false)}
+        onTeamSelect={setActiveTeam}
+      />
     </div>
   );
 }

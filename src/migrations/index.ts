@@ -16,6 +16,7 @@ import * as m013 from './013_message_images';
 import * as m014 from './014_message_files';
 import * as m015 from './015_stripe_billing';
 import * as m016 from './016_usage_logs';
+import * as m017 from './017_teams';
 
 export interface Migration {
   up: (sql: Sql) => Promise<void>;
@@ -39,4 +40,5 @@ export const migrations: Migration[] = [
   m014,
   m015,
   m016,
+  m017,
 ];
