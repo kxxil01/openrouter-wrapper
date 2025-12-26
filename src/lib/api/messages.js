@@ -17,11 +17,16 @@ export async function getMessagesForConversation(conversationId) {
   }
 }
 
-export async function saveMessage(conversationId, role, content, images = []) {
+export async function saveMessage(conversationId, role, content, images = [], files = []) {
   const response = await fetch(`${API_BASE_URL}/conversations/${conversationId}/messages`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ role, content, images: images.length > 0 ? images : undefined }),
+    body: JSON.stringify({
+      role,
+      content,
+      images: images.length > 0 ? images : undefined,
+      files: files.length > 0 ? files : undefined,
+    }),
   });
 
   if (!response.ok) {

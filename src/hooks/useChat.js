@@ -66,8 +66,8 @@ export function useChat({
   }, []);
 
   const sendMessage = useCallback(
-    async (content, images = []) => {
-      if (!content.trim() && images.length === 0) return;
+    async (content, images = [], files = []) => {
+      if (!content.trim() && images.length === 0 && files.length === 0) return;
       setError(null);
       setIsLoading(true);
 
@@ -90,34 +90,55 @@ export function useChat({
             role: 'user',
             content,
             images: images.length > 0 ? images : undefined,
+            files: files.length > 0 ? files : undefined,
             conversation_id: conversationId,
             created_at: new Date().toISOString(),
           };
           setMessages([userMessage]);
           localMessages = [userMessage];
 
-          const savedMessage = await api.saveMessage(conversationId, 'user', content, images);
+          const savedMessage = await api.saveMessage(
+            conversationId,
+            'user',
+            content,
+            images,
+            files
+          );
           setMessages([savedMessage]);
           localMessages = [savedMessage];
           await fetchConversations();
         } else {
-          const savedMessage = await api.saveMessage(conversationId, 'user', content, images);
+          const savedMessage = await api.saveMessage(
+            conversationId,
+            'user',
+            content,
+            images,
+            files
+          );
           localMessages = [...localMessages, savedMessage];
           setMessages(localMessages);
         }
 
         const apiMessages = localMessages.map((msg) => {
-          if (msg.images && msg.images.length > 0) {
-            return {
-              role: msg.role,
-              content: [
-                { type: 'text', text: msg.content || '' },
-                ...msg.images.map((img) => ({
+          const hasImages = msg.images && msg.images.length > 0;
+          const hasFiles = msg.files && msg.files.length > 0;
+
+          if (hasImages || hasFiles) {
+            const contentParts = [];
+            if (hasFiles) {
+              const fileContext = msg.files.map((f) => `[Attached file: ${f.name}]`).join('\n');
+              contentParts.push({ type: 'text', text: fileContext });
+            }
+            contentParts.push({ type: 'text', text: msg.content || '' });
+            if (hasImages) {
+              msg.images.forEach((img) => {
+                contentParts.push({
                   type: 'image_url',
                   image_url: { url: img.data },
-                })),
-              ],
-            };
+                });
+              });
+            }
+            return { role: msg.role, content: contentParts };
           }
           return { role: msg.role, content: msg.content };
         });

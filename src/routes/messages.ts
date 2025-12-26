@@ -107,10 +107,10 @@ messageRoutes.post('/conversation/:id', async (c) => {
 
   try {
     const conversationId = c.req.param('id');
-    const { role, content, images } = await c.req.json();
+    const { role, content, images, files } = await c.req.json();
 
-    if (!role || (!content && (!images || images.length === 0))) {
-      return c.json({ error: 'Role and content (or images) are required' }, 400);
+    if (!role || (!content && (!images || images.length === 0) && (!files || files.length === 0))) {
+      return c.json({ error: 'Role and content (or attachments) are required' }, 400);
     }
 
     if (!['user', 'assistant', 'system'].includes(role)) {
@@ -125,9 +125,10 @@ messageRoutes.post('/conversation/:id', async (c) => {
 
     const messageId = uuidv7();
     const imagesJson = images && images.length > 0 ? JSON.stringify(images) : null;
+    const filesJson = files && files.length > 0 ? JSON.stringify(files) : null;
     const [message] = await sql`
-      INSERT INTO messages (id, conversation_id, role, content, images, created_at)
-      VALUES (${messageId}, ${conversationId}, ${role}, ${content || ''}, ${imagesJson}, NOW())
+      INSERT INTO messages (id, conversation_id, role, content, images, files, created_at)
+      VALUES (${messageId}, ${conversationId}, ${role}, ${content || ''}, ${imagesJson}, ${filesJson}, NOW())
       RETURNING *
     `;
 
