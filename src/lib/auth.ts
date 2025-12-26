@@ -162,7 +162,8 @@ export async function validateSession(token: string): Promise<User | null> {
     SELECT 
       u.id, u.google_id, u.email, u.name, u.picture, u.locale, u.hd, 
       u.subscription_status, u.subscription_expires_at, u.message_count, u.message_count_reset_at,
-      u.created_at, u.updated_at, u.last_login_at
+      u.created_at, u.updated_at, u.last_login_at,
+      u.user_type, u.subscription_tier, u.subscription_scope
     FROM sessions s
     JOIN users u ON s.user_id = u.id
     WHERE s.token_hash = ${tokenHash} AND s.expires_at > NOW()

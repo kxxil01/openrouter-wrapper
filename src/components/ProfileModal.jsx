@@ -369,7 +369,12 @@ function ProfileModal({ isOpen, onClose }) {
             </section>
 
             <section>
-              <h3 className="text-sm font-medium text-gpt-muted mb-3">Subscription</h3>
+              <h3 className="text-sm font-medium text-gpt-muted mb-3">
+                Subscription{' '}
+                {profile?.user_type && (
+                  <span className="text-xs text-gpt-muted">({profile.user_type})</span>
+                )}
+              </h3>
               <div className="p-4 bg-gradient-to-r from-purple-600/20 to-blue-600/20 border border-purple-500/30 rounded-lg">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-gpt-text font-medium">
