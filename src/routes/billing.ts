@@ -77,17 +77,7 @@ billingRoutes.post('/create-checkout-session', async (c) => {
       payment_method_types: ['card'],
       line_items: [
         {
-          price_data: {
-            currency: 'usd',
-            product_data: {
-              name: `Pro ${subscriptionScope.charAt(0).toUpperCase() + subscriptionScope.slice(1)}`,
-              description: `${interval === 'yearly' ? 'Annual' : 'Monthly'} subscription`,
-            },
-            unit_amount: intervalConfig.amount,
-            recurring: {
-              interval: intervalConfig.interval,
-            },
-          },
+          price: intervalConfig.priceId,
           quantity: 1,
         },
       ],
@@ -97,8 +87,8 @@ billingRoutes.post('/create-checkout-session', async (c) => {
         interval,
         subscription_scope: subscriptionScope,
       },
-      success_url: `${BASE_URL}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${BASE_URL}/billing/cancel`,
+      success_url: `${BASE_URL}/?checkout=success`,
+      cancel_url: `${BASE_URL}/?checkout=cancel`,
     });
 
     return c.json({ sessionId: session.id, url: session.url });
