@@ -6,6 +6,7 @@ import PaywallModal from './components/PaywallModal';
 import SearchModal from './components/SearchModal';
 import SystemPromptModal from './components/SystemPromptModal';
 import SharedConversation from './components/SharedConversation';
+import ProfileModal from './components/ProfileModal';
 import * as api from './lib/api';
 import {
   useModels,
@@ -21,6 +22,7 @@ function App() {
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [showSystemPrompt, setShowSystemPrompt] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
 
   const { user, isLoading: isAuthLoading, login, logout } = useAuth();
   const { models, selectedModel, setSelectedModel } = useModels();
@@ -178,6 +180,7 @@ function App() {
         onDeleteFolder={deleteFolder}
         onMoveToFolder={handleMoveToFolder}
         onShareConversation={fetchConversations}
+        onOpenProfile={() => setShowProfile(true)}
       />
       <ChatInterface
         messages={messages}
@@ -206,6 +209,7 @@ function App() {
         currentPrompt={currentConversation?.system_prompt}
         onSave={handleSaveSystemPrompt}
       />
+      <ProfileModal isOpen={showProfile} onClose={() => setShowProfile(false)} />
     </div>
   );
 }

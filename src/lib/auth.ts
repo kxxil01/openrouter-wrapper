@@ -34,6 +34,10 @@ export interface User {
   created_at: Date;
   updated_at: Date;
   last_login_at?: Date;
+  stripe_customer_id?: string;
+  stripe_subscription_id?: string;
+  openrouter_api_key?: string;
+  total_tokens_used?: number;
 }
 
 export interface Session {
