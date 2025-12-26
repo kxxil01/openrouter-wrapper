@@ -21,9 +21,11 @@ async function streamOpenRouterCompletion(
   onChunk: (content: string) => void,
   onComplete: (fullContent: string) => void,
   onError: (error: Error) => void,
-  temperature: number = 0.7
+  temperature: number = 0.7,
+  customApiKey?: string | null
 ): Promise<void> {
-  if (!OPENROUTER_API_KEY) {
+  const apiKey = customApiKey || OPENROUTER_API_KEY;
+  if (!apiKey) {
     onError(new Error('OpenRouter API key is not configured'));
     return;
   }
@@ -33,7 +35,7 @@ async function streamOpenRouterCompletion(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+        Authorization: `Bearer ${apiKey}`,
         'HTTP-Referer': 'https://claude-opus-wrapper.com',
         'X-Title': 'Claude Opus Wrapper',
       },
@@ -144,12 +146,14 @@ chatRoutes.post('/completions', async (c) => {
   let userId: string | null = null;
   let subscriptionStatus: string = 'free';
   let messageCount: number = 0;
+  let userApiKey: string | null = null;
 
   if (sessionToken) {
     const user = await auth.validateSession(sessionToken);
     if (user) {
       userId = user.id;
       subscriptionStatus = user.subscription_status || 'free';
+      userApiKey = user.openrouter_api_key || null;
 
       const todayUTC = getTodayUTC();
       const resetDate = user.message_count_reset_at
@@ -165,7 +169,12 @@ chatRoutes.post('/completions', async (c) => {
     }
   }
 
-  if (!DISABLE_PAYWALL && subscriptionStatus !== 'active' && messageCount >= FREE_MESSAGE_LIMIT) {
+  if (
+    !DISABLE_PAYWALL &&
+    !userApiKey &&
+    subscriptionStatus !== 'active' &&
+    messageCount >= FREE_MESSAGE_LIMIT
+  ) {
     return c.json(
       {
         error: {
@@ -295,16 +304,21 @@ chatRoutes.post('/completions', async (c) => {
             }),
           });
         },
-        temperature
+        temperature,
+        userApiKey
       );
     });
   } else {
+    const apiKey = userApiKey || OPENROUTER_API_KEY;
+    if (!apiKey) {
+      return c.json({ error: 'OpenRouter API key is not configured' }, 500);
+    }
     try {
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+          Authorization: `Bearer ${apiKey}`,
           'HTTP-Referer': 'https://claude-opus-wrapper.com',
           'X-Title': 'Claude Opus Wrapper',
         },
