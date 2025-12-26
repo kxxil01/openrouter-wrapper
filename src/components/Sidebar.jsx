@@ -418,7 +418,7 @@ function Sidebar({
                   <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
                 </svg>
               </button>
-              {user.user_type === 'admin' && (
+              {user.user_type === 'superadmin' && (
                 <button
                   onClick={onOpenAdmin}
                   className="p-1.5 text-gpt-muted hover:text-gpt-text rounded transition-colors"

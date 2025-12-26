@@ -38,7 +38,7 @@ export interface User {
   stripe_subscription_id?: string;
   openrouter_api_key?: string;
   total_tokens_used?: number;
-  user_type: 'user' | 'admin';
+  user_type: 'user' | 'admin' | 'superadmin';
 }
 
 export interface Session {

@@ -5,11 +5,11 @@ import { sql } from '../lib/db';
 
 const adminRoutes = new Hono();
 
-async function isAdmin(sessionToken: string): Promise<auth.User | null> {
+async function isSuperAdmin(sessionToken: string): Promise<auth.User | null> {
   if (!sessionToken) return null;
   const user = await auth.validateSession(sessionToken);
   if (!user) return null;
-  if (user.user_type !== 'admin') {
+  if (user.user_type !== 'superadmin') {
     return null;
   }
   return user;
@@ -17,7 +17,7 @@ async function isAdmin(sessionToken: string): Promise<auth.User | null> {
 
 adminRoutes.get('/stats', async (c) => {
   const sessionToken = getCookie(c, 'session');
-  const admin = await isAdmin(sessionToken || '');
+  const admin = await isSuperAdmin(sessionToken || '');
   if (!admin) return c.json({ error: 'Unauthorized' }, 401);
 
   try {
@@ -104,7 +104,7 @@ adminRoutes.get('/stats', async (c) => {
 
 adminRoutes.get('/users', async (c) => {
   const sessionToken = getCookie(c, 'session');
-  const admin = await isAdmin(sessionToken || '');
+  const admin = await isSuperAdmin(sessionToken || '');
   if (!admin) return c.json({ error: 'Unauthorized' }, 401);
 
   const page = parseInt(c.req.query('page') || '1');
@@ -167,7 +167,7 @@ adminRoutes.get('/users', async (c) => {
 
 adminRoutes.get('/users/:id', async (c) => {
   const sessionToken = getCookie(c, 'session');
-  const admin = await isAdmin(sessionToken || '');
+  const admin = await isSuperAdmin(sessionToken || '');
   if (!admin) return c.json({ error: 'Unauthorized' }, 401);
 
   const userId = c.req.param('id');
@@ -226,7 +226,7 @@ adminRoutes.get('/users/:id', async (c) => {
 
 adminRoutes.patch('/users/:id', async (c) => {
   const sessionToken = getCookie(c, 'session');
-  const admin = await isAdmin(sessionToken || '');
+  const admin = await isSuperAdmin(sessionToken || '');
   if (!admin) return c.json({ error: 'Unauthorized' }, 401);
 
   const userId = c.req.param('id');
@@ -251,7 +251,7 @@ adminRoutes.patch('/users/:id', async (c) => {
 
 adminRoutes.get('/billing', async (c) => {
   const sessionToken = getCookie(c, 'session');
-  const admin = await isAdmin(sessionToken || '');
+  const admin = await isSuperAdmin(sessionToken || '');
   if (!admin) return c.json({ error: 'Unauthorized' }, 401);
 
   try {

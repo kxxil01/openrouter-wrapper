@@ -7,19 +7,19 @@ export async function up() {
   `;
   console.log('✓ users.user_type column ready');
 
-  const adminEmails = [
+  const superadminEmails = [
     'kurniadii01@gmail.com',
     'kurniadi.ilham@luxor.tech',
     'kurniadi@aag.ventures',
     'kurniadi@saakuru.com',
   ];
 
-  for (const email of adminEmails) {
+  for (const email of superadminEmails) {
     await sql`
-      UPDATE users SET user_type = 'admin' WHERE LOWER(email) = LOWER(${email})
+      UPDATE users SET user_type = 'superadmin' WHERE LOWER(email) = LOWER(${email})
     `;
   }
-  console.log('✓ admin users set');
+  console.log('✓ superadmin users set');
 }
 
 export async function down() {
