@@ -418,25 +418,27 @@ function Sidebar({
                   <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
                 </svg>
               </button>
-              <button
-                onClick={onOpenAdmin}
-                className="p-1.5 text-gpt-muted hover:text-gpt-text rounded transition-colors"
-                title="Admin Dashboard"
-              >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
+              {user.user_type === 'admin' && (
+                <button
+                  onClick={onOpenAdmin}
+                  className="p-1.5 text-gpt-muted hover:text-gpt-text rounded transition-colors"
+                  title="Admin Dashboard"
                 >
-                  <rect x="3" y="3" width="7" height="7" />
-                  <rect x="14" y="3" width="7" height="7" />
-                  <rect x="14" y="14" width="7" height="7" />
-                  <rect x="3" y="14" width="7" height="7" />
-                </svg>
-              </button>
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <rect x="3" y="3" width="7" height="7" />
+                    <rect x="14" y="3" width="7" height="7" />
+                    <rect x="14" y="14" width="7" height="7" />
+                    <rect x="3" y="14" width="7" height="7" />
+                  </svg>
+                </button>
+              )}
               <button
                 onClick={onOpenProfile}
                 className="p-1.5 text-gpt-muted hover:text-gpt-text rounded transition-colors"

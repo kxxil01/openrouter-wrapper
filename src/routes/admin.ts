@@ -5,13 +5,13 @@ import { sql } from '../lib/db';
 
 const adminRoutes = new Hono();
 
-const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '').split(',').filter(Boolean);
-
 async function isAdmin(sessionToken: string): Promise<auth.User | null> {
   if (!sessionToken) return null;
   const user = await auth.validateSession(sessionToken);
   if (!user) return null;
-  if (!ADMIN_EMAILS.includes(user.email)) return null;
+  if (user.user_type !== 'admin') {
+    return null;
+  }
   return user;
 }
 
@@ -65,11 +65,12 @@ adminRoutes.get('/stats', async (c) => {
 
     const dailyActiveUsers = await sql`
       SELECT 
-        DATE(created_at) as date,
-        COUNT(DISTINCT user_id) as active_users
-      FROM messages
-      WHERE created_at > NOW() - INTERVAL '30 days'
-      GROUP BY DATE(created_at)
+        DATE(m.created_at) as date,
+        COUNT(DISTINCT c.user_id) as active_users
+      FROM messages m
+      JOIN conversations c ON m.conversation_id = c.id
+      WHERE m.created_at > NOW() - INTERVAL '30 days'
+      GROUP BY DATE(m.created_at)
       ORDER BY date DESC
       LIMIT 30
     `;
