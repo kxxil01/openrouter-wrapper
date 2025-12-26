@@ -63,8 +63,8 @@ async function streamOpenRouterCompletion(
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
-        'HTTP-Referer': 'https://claude-opus-wrapper.com',
-        'X-Title': 'Claude Opus Wrapper',
+        'HTTP-Referer': 'https://chat.free-ai.dev',
+        'X-Title': 'Free AI Chat',
       },
       body: JSON.stringify({
         model,
@@ -132,8 +132,8 @@ async function generateConversationTitle(
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-        'HTTP-Referer': 'https://claude-opus-wrapper.com',
-        'X-Title': 'Claude Opus Wrapper',
+        'HTTP-Referer': 'https://chat.free-ai.dev',
+        'X-Title': 'Free AI Chat',
       },
       body: JSON.stringify({
         model: 'google/gemini-2.0-flash-exp:free',
