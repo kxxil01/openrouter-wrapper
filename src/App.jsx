@@ -82,7 +82,7 @@ function App() {
     } else {
       clearMessages();
     }
-  }, [currentConversation, fetchMessages, clearMessages]);
+  }, [currentConversation, fetchMessages, clearMessages, models, setSelectedModel]);
 
   const handleSelectConversation = useCallback(
     async (conversationId) => {

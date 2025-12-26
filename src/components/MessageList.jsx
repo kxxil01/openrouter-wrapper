@@ -56,7 +56,7 @@ const CopyButton = memo(function CopyButton({ code, label = 'Copy code' }) {
 });
 
 function MessageList({ messages, onEditMessage, onRegenerateResponse }) {
-  const [_typingDots, setTypingDots] = useState('');
+  const [, setTypingDots] = useState('');
   const [editingIndex, setEditingIndex] = useState(null);
   const [editContent, setEditContent] = useState('');
 
