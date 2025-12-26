@@ -178,7 +178,14 @@ chatRoutes.post('/completions', async (c) => {
   }
 
   const body = await c.req.json();
-  const { messages, model, stream = false, conversation_id, temperature = 0.7 } = body;
+  const {
+    messages,
+    model,
+    stream = false,
+    conversation_id,
+    temperature = 0.7,
+    system_prompt,
+  } = body;
   const requestId = uuidv7().substring(0, 8);
 
   console.log(`[${requestId}] Chat request, stream=${stream}, temperature=${temperature}`);
@@ -189,10 +196,24 @@ chatRoutes.post('/completions', async (c) => {
 
   const modelId = model || DEFAULT_MODEL_ID;
 
+  let finalSystemPrompt = system_prompt;
+  if (!finalSystemPrompt && conversation_id) {
+    const [conv] = await sql<{ system_prompt: string | null }[]>`
+      SELECT system_prompt FROM conversations WHERE id = ${conversation_id}
+    `;
+    if (conv?.system_prompt) {
+      finalSystemPrompt = conv.system_prompt;
+    }
+  }
+
+  const apiMessages = finalSystemPrompt
+    ? [{ role: 'system', content: finalSystemPrompt }, ...messages]
+    : messages;
+
   if (stream) {
     return streamSSE(c, async (stream) => {
       await streamOpenRouterCompletion(
-        messages,
+        apiMessages,
         modelId,
         (chunk) => {
           const deltaFormat = {

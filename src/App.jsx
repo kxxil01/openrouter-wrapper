@@ -4,6 +4,8 @@ import Sidebar from './components/Sidebar';
 import LandingPage from './components/LandingPage';
 import PaywallModal from './components/PaywallModal';
 import SearchModal from './components/SearchModal';
+import SystemPromptModal from './components/SystemPromptModal';
+import * as api from './lib/api';
 import {
   useModels,
   useConversations,
@@ -16,6 +18,7 @@ import {
 function App() {
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+  const [showSystemPrompt, setShowSystemPrompt] = useState(false);
 
   const { user, isLoading: isAuthLoading, login, logout } = useAuth();
   const { models, selectedModel, setSelectedModel } = useModels();
@@ -109,6 +112,21 @@ function App() {
     [handleSelectConversation, fetchMessages]
   );
 
+  const handleSaveSystemPrompt = useCallback(
+    async (systemPrompt) => {
+      if (!currentConversation) return;
+      try {
+        const updated = await api.updateConversation(currentConversation.id, {
+          system_prompt: systemPrompt,
+        });
+        setCurrentConversation(updated);
+      } catch (err) {
+        console.error('Failed to save system prompt:', err);
+      }
+    },
+    [currentConversation, setCurrentConversation]
+  );
+
   if (isAuthLoading) {
     return (
       <div className="min-h-screen bg-gpt-bg flex items-center justify-center">
@@ -148,12 +166,20 @@ function App() {
         selectedModel={selectedModel}
         availableModels={models}
         onModelSelect={setSelectedModel}
+        hasSystemPrompt={!!currentConversation?.system_prompt}
+        onOpenSystemPrompt={() => setShowSystemPrompt(true)}
       />
       {showPaywall && <PaywallModal onClose={() => setShowPaywall(false)} />}
       <SearchModal
         isOpen={showSearch}
         onClose={() => setShowSearch(false)}
         onSelectConversation={handleSearchSelect}
+      />
+      <SystemPromptModal
+        isOpen={showSystemPrompt}
+        onClose={() => setShowSystemPrompt(false)}
+        currentPrompt={currentConversation?.system_prompt}
+        onSave={handleSaveSystemPrompt}
       />
     </div>
   );
