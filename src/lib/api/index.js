@@ -34,4 +34,5 @@ export {
   removeConversationFromTeam,
 } from './teams';
 export { getAdminStats, getUsers, getUserDetails, updateUser, getBillingStats } from './admin';
+export { getUserPermissions } from './permissions';
 export { API_BASE_URL } from './config';
