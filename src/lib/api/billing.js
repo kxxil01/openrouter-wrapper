@@ -1,7 +1,7 @@
 import { API_BASE_URL } from './config';
 
 export async function getBillingConfig() {
-  const response = await fetch(`${API_BASE_URL}/api/billing/config`, {
+  const response = await fetch(`${API_BASE_URL}/billing/config`, {
     credentials: 'include',
   });
   if (!response.ok) {
@@ -11,7 +11,7 @@ export async function getBillingConfig() {
 }
 
 export async function createCheckoutSession(plan, interval) {
-  const response = await fetch(`${API_BASE_URL}/api/billing/create-checkout-session`, {
+  const response = await fetch(`${API_BASE_URL}/billing/create-checkout-session`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
@@ -24,7 +24,7 @@ export async function createCheckoutSession(plan, interval) {
 }
 
 export async function createPortalSession() {
-  const response = await fetch(`${API_BASE_URL}/api/billing/create-portal-session`, {
+  const response = await fetch(`${API_BASE_URL}/billing/create-portal-session`, {
     method: 'POST',
     credentials: 'include',
   });
@@ -35,7 +35,7 @@ export async function createPortalSession() {
 }
 
 export async function getSubscription() {
-  const response = await fetch(`${API_BASE_URL}/api/billing/subscription`, {
+  const response = await fetch(`${API_BASE_URL}/billing/subscription`, {
     credentials: 'include',
   });
   if (!response.ok) {
