@@ -43,3 +43,14 @@ export async function getSubscription() {
   }
   return response.json();
 }
+
+export async function verifySubscription() {
+  const response = await fetch(`${API_BASE_URL}/billing/verify-subscription`, {
+    method: 'POST',
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    throw new Error('Failed to verify subscription');
+  }
+  return response.json();
+}

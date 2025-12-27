@@ -40,5 +40,6 @@ export {
   createCheckoutSession,
   createPortalSession,
   getSubscription,
+  verifySubscription,
 } from './billing';
 export { API_BASE_URL } from './config';

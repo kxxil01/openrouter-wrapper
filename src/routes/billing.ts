@@ -152,6 +152,71 @@ billingRoutes.get('/subscription', async (c) => {
   });
 });
 
+billingRoutes.post('/verify-subscription', async (c) => {
+  if (!stripe) {
+    return c.json({ error: 'Stripe not configured' }, 500);
+  }
+
+  const sessionToken = getCookie(c, 'session');
+  if (!sessionToken) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+
+  const user = await auth.validateSession(sessionToken);
+  if (!user) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+
+  if (!user.stripe_customer_id) {
+    return c.json({ error: 'No Stripe customer found' }, 400);
+  }
+
+  try {
+    const subscriptions = await stripe.subscriptions.list({
+      customer: user.stripe_customer_id,
+      status: 'active',
+      limit: 1,
+    });
+
+    if (subscriptions.data.length > 0) {
+      const subscription = subscriptions.data[0];
+      const periodEnd = (subscription as { current_period_end?: number }).current_period_end;
+      const expiresAt = periodEnd ? new Date(periodEnd * 1000) : null;
+
+      if (user.subscription_status !== 'active' || user.subscription_tier !== 'pro') {
+        await sql`
+          UPDATE users 
+          SET 
+            stripe_subscription_id = ${subscription.id},
+            subscription_status = 'active',
+            subscription_tier = 'pro',
+            subscription_scope = 'individual',
+            subscription_expires_at = ${expiresAt},
+            updated_at = NOW()
+          WHERE id = ${user.id}
+        `;
+        console.log(`User ${user.id} subscription verified and updated to pro`);
+      }
+
+      return c.json({
+        status: 'active',
+        tier: 'pro',
+        expires_at: expiresAt,
+        updated: user.subscription_status !== 'active',
+      });
+    }
+
+    return c.json({
+      status: user.subscription_status,
+      tier: user.subscription_tier,
+      updated: false,
+    });
+  } catch (error) {
+    console.error('Error verifying subscription:', error);
+    return c.json({ error: 'Failed to verify subscription' }, 500);
+  }
+});
+
 billingRoutes.post('/webhook', async (c) => {
   if (!stripe) {
     return c.json({ error: 'Stripe not configured' }, 500);

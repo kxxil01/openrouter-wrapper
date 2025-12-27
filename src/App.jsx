@@ -10,6 +10,7 @@ import ProfileModal from './components/ProfileModal';
 import TeamModal from './components/TeamModal';
 import AdminDashboard from './components/AdminDashboard';
 import * as api from './lib/api';
+import { verifySubscription } from './lib/api';
 import {
   useModels,
   useConversations,
@@ -29,7 +30,7 @@ function App() {
   const [activeTeam, setActiveTeam] = useState(null);
   const [showAdmin, setShowAdmin] = useState(false);
 
-  const { user, isLoading: isAuthLoading, login, logout } = useAuth();
+  const { user, isLoading: isAuthLoading, login, logout, refreshUser } = useAuth();
   const { models, selectedModel, setSelectedModel } = useModels();
   const {
     conversations,
@@ -74,6 +75,20 @@ function App() {
     onToggleSidebar: () => setSidebarOpen((prev) => !prev),
     onNewChat: handleNewChat,
   });
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('checkout') === 'success' && user) {
+      verifySubscription()
+        .then((result) => {
+          if (result.updated) {
+            refreshUser();
+          }
+          window.history.replaceState({}, '', window.location.pathname);
+        })
+        .catch(console.error);
+    }
+  }, [user, refreshUser]);
 
   useEffect(() => {
     if (currentConversation) {
