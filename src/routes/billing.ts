@@ -157,7 +157,7 @@ billingRoutes.post('/webhook', async (c) => {
     return c.json({ error: 'Stripe not configured' }, 500);
   }
 
-  const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
+  const WEBHOOK_SECRET = config.stripe.webhookSecret;
   if (!WEBHOOK_SECRET) {
     console.warn('STRIPE_WEBHOOK_SECRET not set, skipping signature verification');
   }

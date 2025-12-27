@@ -1,9 +1,10 @@
 import { Hono } from 'hono';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import * as auth from '../lib/auth';
+import { config } from '../lib/config';
 
-const DISABLE_PAYWALL = process.env.DISABLE_PAYWALL === 'true';
-const AUTH_ENABLED = process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET;
+const DISABLE_PAYWALL = config.paywall.disabled;
+const AUTH_ENABLED = config.auth.google.clientId && config.auth.google.clientSecret;
 
 const authRoutes = new Hono();
 
@@ -37,9 +38,9 @@ authRoutes.get('/callback', async (c) => {
 
     setCookie(c, 'session', sessionToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: config.nodeEnv === 'production',
       sameSite: 'Lax',
-      maxAge: 7 * 24 * 60 * 60,
+      maxAge: config.auth.sessionExpiryDays * 24 * 60 * 60,
       path: '/',
     });
 

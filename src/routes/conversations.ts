@@ -3,8 +3,9 @@ import { getCookie } from 'hono/cookie';
 import { v7 as uuidv7 } from 'uuid';
 import * as auth from '../lib/auth';
 import { sql } from '../lib/db';
+import { config } from '../lib/config';
 
-const DEFAULT_MODEL_ID = process.env.DEFAULT_MODEL_ID || 'deepseek/deepseek-r1-0528:free';
+const DEFAULT_MODEL_ID = config.openRouter.defaultModel;
 
 interface Message {
   id: string;
@@ -139,7 +140,7 @@ conversationRoutes.delete('/:id', async (c) => {
 });
 
 conversationRoutes.post('/:id/generate-title', async (c) => {
-  const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+  const OPENROUTER_API_KEY = config.openRouter.apiKey;
 
   try {
     const id = c.req.param('id');
