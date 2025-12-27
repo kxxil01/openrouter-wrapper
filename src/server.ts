@@ -18,11 +18,13 @@ import adminRoutes from './routes/admin';
 import permissionRoutes from './routes/permissions';
 import billingRoutes from './routes/billing';
 
+import { config } from './lib/config';
+
 const app = new Hono();
 
-const PORT = process.env.PORT || 3001;
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-const AUTH_ENABLED = process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET;
+const PORT = config.port;
+const OPENROUTER_API_KEY = config.openRouter.apiKey;
+const AUTH_ENABLED = config.auth.google.clientId && config.auth.google.clientSecret;
 
 if (!OPENROUTER_API_KEY) {
   console.warn('OPENROUTER_API_KEY is not set - Claude API functionality will be unavailable');
@@ -35,7 +37,7 @@ if (!AUTH_ENABLED) {
 app.use(
   '*',
   cors({
-    origin: ['http://localhost:3001', 'http://localhost:5173'],
+    origin: config.cors.origins,
     credentials: true,
   })
 );

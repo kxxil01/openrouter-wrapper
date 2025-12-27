@@ -1,14 +1,14 @@
 import postgres from 'postgres';
+import { config } from './config';
 
-const sql = postgres(process.env.DATABASE_URL!, {
+const sql = postgres(config.database.url, {
   ssl: { rejectUnauthorized: false },
 });
 
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
-const GOOGLE_REDIRECT_URI =
-  process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3001/auth/callback';
-const SESSION_EXPIRY_DAYS = parseInt(process.env.SESSION_EXPIRY_DAYS || '7', 10);
+const GOOGLE_CLIENT_ID = config.auth.google.clientId;
+const GOOGLE_CLIENT_SECRET = config.auth.google.clientSecret;
+const GOOGLE_REDIRECT_URI = config.auth.google.redirectUri;
+const SESSION_EXPIRY_DAYS = config.auth.sessionExpiryDays;
 
 export interface GoogleUser {
   id: string;

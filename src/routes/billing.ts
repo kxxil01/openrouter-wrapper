@@ -4,10 +4,11 @@ import * as auth from '../lib/auth';
 import { sql } from '../lib/db';
 import { stripe, STRIPE_PUBLISHABLE_KEY, PRICE_CONFIG } from '../lib/stripe';
 import type { SubscriptionPlan, BillingInterval } from '../lib/stripe';
+import { config } from '../lib/config';
 
 const billingRoutes = new Hono();
 
-const BASE_URL = process.env.BASE_URL || 'http://localhost:3001';
+const BASE_URL = config.baseUrl;
 
 billingRoutes.get('/config', async (c) => {
   return c.json({

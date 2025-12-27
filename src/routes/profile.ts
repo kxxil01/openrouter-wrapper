@@ -2,8 +2,9 @@ import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
 import * as auth from '../lib/auth';
 import { sql } from '../lib/db';
+import { config } from '../lib/config';
 
-const DISABLE_PAYWALL = process.env.DISABLE_PAYWALL === 'true';
+const DISABLE_PAYWALL = config.paywall.disabled;
 
 const profileRoutes = new Hono();
 

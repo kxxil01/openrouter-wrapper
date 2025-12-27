@@ -4,12 +4,13 @@ import { getCookie } from 'hono/cookie';
 import { v7 as uuidv7 } from 'uuid';
 import * as auth from '../lib/auth';
 import { sql } from '../lib/db';
+import { config } from '../lib/config';
 
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-const DEFAULT_MODEL_ID = process.env.DEFAULT_MODEL_ID || 'deepseek/deepseek-r1-0528:free';
-const DISABLE_PAYWALL = process.env.DISABLE_PAYWALL === 'true';
-const FREE_MESSAGE_LIMIT = 5;
-const TITLE_GENERATION_THRESHOLDS = [1, 3, 5];
+const OPENROUTER_API_KEY = config.openRouter.apiKey;
+const DEFAULT_MODEL_ID = config.openRouter.defaultModel;
+const DISABLE_PAYWALL = config.paywall.disabled;
+const FREE_MESSAGE_LIMIT = config.paywall.freeMessageLimit;
+const TITLE_GENERATION_THRESHOLDS = config.paywall.titleGenerationThresholds;
 
 interface UsageInfo {
   promptTokens: number;
