@@ -27,13 +27,9 @@ export async function up(sql: Sql) {
   // SESSIONS TABLE - Auth Performance
   // ============================================
 
-  // Composite index for valid session validation (most common auth query)
-  await sql`CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_sessions_valid ON sessions(token_hash, expires_at) WHERE expires_at > NOW()`;
-  console.log('✓ sessions valid_sessions partial index ready');
-
-  // Index for session cleanup (expired sessions)
-  await sql`CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_sessions_expired ON sessions(expires_at) WHERE expires_at <= NOW()`;
-  console.log('✓ sessions expired partial index ready');
+  // Composite index for session validation (token + expiry for fast lookups)
+  await sql`CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_sessions_token_expires ON sessions(token_hash, expires_at)`;
+  console.log('✓ sessions token+expires composite index ready');
 
   // ============================================
   // CONVERSATIONS TABLE - List & Lookup Queries
@@ -79,9 +75,9 @@ export async function up(sql: Sql) {
   await sql`CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_team_invites_email ON team_invites(email)`;
   console.log('✓ team_invites email index ready');
 
-  // Partial index for valid (non-expired) invites
-  await sql`CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_team_invites_valid ON team_invites(token, expires_at) WHERE expires_at > NOW()`;
-  console.log('✓ team_invites valid partial index ready');
+  // Composite index for invite validation (token + expiry)
+  await sql`CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_team_invites_token_expires ON team_invites(token, expires_at)`;
+  console.log('✓ team_invites token+expires composite index ready');
 
   // ============================================
   // USAGE LOGS - Analytics Performance
@@ -117,8 +113,7 @@ export async function down(sql: Sql) {
   await sql`DROP INDEX CONCURRENTLY IF EXISTS idx_users_message_reset`;
   await sql`DROP INDEX CONCURRENTLY IF EXISTS idx_users_active_subscribers`;
   await sql`DROP INDEX CONCURRENTLY IF EXISTS idx_users_user_type`;
-  await sql`DROP INDEX CONCURRENTLY IF EXISTS idx_sessions_valid`;
-  await sql`DROP INDEX CONCURRENTLY IF EXISTS idx_sessions_expired`;
+  await sql`DROP INDEX CONCURRENTLY IF EXISTS idx_sessions_token_expires`;
   await sql`DROP INDEX CONCURRENTLY IF EXISTS idx_conversations_user_folder`;
   await sql`DROP INDEX CONCURRENTLY IF EXISTS idx_conversations_shared`;
   await sql`DROP INDEX CONCURRENTLY IF EXISTS idx_conversations_team_updated`;
@@ -126,7 +121,7 @@ export async function down(sql: Sql) {
   await sql`DROP INDEX CONCURRENTLY IF EXISTS idx_messages_role`;
   await sql`DROP INDEX CONCURRENTLY IF EXISTS idx_folders_user_sort`;
   await sql`DROP INDEX CONCURRENTLY IF EXISTS idx_team_invites_email`;
-  await sql`DROP INDEX CONCURRENTLY IF EXISTS idx_team_invites_valid`;
+  await sql`DROP INDEX CONCURRENTLY IF EXISTS idx_team_invites_token_expires`;
   await sql`DROP INDEX CONCURRENTLY IF EXISTS idx_usage_logs_model`;
   await sql`DROP INDEX CONCURRENTLY IF EXISTS idx_usage_logs_custom_key`;
 
