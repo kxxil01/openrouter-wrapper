@@ -19,6 +19,7 @@ import * as m016 from './016_usage_logs';
 import * as m017 from './017_teams';
 import * as m018 from './018_user_type';
 import * as m019 from './019_subscription_tiers';
+import * as m020 from './020_performance_indexes';
 
 export interface Migration {
   up: (sql: Sql) => Promise<void>;
@@ -45,4 +46,5 @@ export const migrations: Migration[] = [
   m017,
   m018,
   m019,
+  m020,
 ];
