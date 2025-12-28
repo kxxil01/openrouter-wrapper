@@ -19,6 +19,7 @@ import permissionRoutes from './routes/permissions';
 import billingRoutes from './routes/billing';
 
 import { config } from './lib/config';
+import { initRedis } from './lib/redis';
 
 const app = new Hono();
 
@@ -111,6 +112,14 @@ app.get('/*', async (c) => {
   }
 
   return c.text('Not found - run "bun run build" first', 404);
+});
+
+initRedis().then((connected) => {
+  if (connected) {
+    console.log(`Redis cache enabled`);
+  } else {
+    console.log(`Redis not available - using PostgreSQL for sessions`);
+  }
 });
 
 console.log(`Server running on http://localhost:${PORT}`);

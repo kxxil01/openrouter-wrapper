@@ -1,5 +1,13 @@
 import postgres from 'postgres';
 import { config } from './config';
+import {
+  isRedisAvailable,
+  getSession as getRedisSession,
+  setSession as setRedisSession,
+  deleteSession as deleteRedisSession,
+  SESSION_TTL,
+  type SessionData,
+} from './redis';
 
 const sql = postgres(config.database.url, {
   ssl: { rejectUnauthorized: false },
@@ -152,11 +160,30 @@ export async function createSession(
     VALUES (${userId}, ${tokenHash}, ${expiresAt}, ${ipAddress || null}, ${userAgent || null})
   `;
 
+  if (isRedisAvailable()) {
+    const sessionData: SessionData = {
+      userId,
+      createdAt: new Date().toISOString(),
+      expiresAt: expiresAt.toISOString(),
+    };
+    await setRedisSession(tokenHash, sessionData);
+  }
+
   return token;
 }
 
 export async function validateSession(token: string): Promise<User | null> {
   const tokenHash = await hashToken(token);
+
+  if (isRedisAvailable()) {
+    const cachedSession = await getRedisSession(tokenHash);
+    if (cachedSession) {
+      const user = await getUserById(cachedSession.userId);
+      if (user) {
+        return user;
+      }
+    }
+  }
 
   const result = await sql`
     SELECT 
@@ -175,6 +202,15 @@ export async function validateSession(token: string): Promise<User | null> {
   }
 
   const row = result[0];
+
+  if (isRedisAvailable()) {
+    const sessionData: SessionData = {
+      userId: row.id,
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + SESSION_TTL * 1000).toISOString(),
+    };
+    await setRedisSession(tokenHash, sessionData);
+  }
   return {
     id: row.id,
     google_id: row.google_id,
@@ -202,6 +238,11 @@ export async function validateSession(token: string): Promise<User | null> {
 
 export async function deleteSession(token: string): Promise<void> {
   const tokenHash = await hashToken(token);
+
+  if (isRedisAvailable()) {
+    await deleteRedisSession(tokenHash);
+  }
+
   await sql`DELETE FROM sessions WHERE token_hash = ${tokenHash}`;
 }
 

@@ -53,6 +53,12 @@ export const config = {
   cors: {
     origins: (process.env.CORS_ORIGINS || 'http://localhost:3001,http://localhost:5173').split(','),
   },
+
+  redis: {
+    host: process.env.REDIS_HOST || 'localhost',
+    port: parseInt(process.env.REDIS_PORT || '6379', 10),
+    password: process.env.REDIS_PASSWORD || '',
+  },
 };
 
 export type Config = typeof config;
