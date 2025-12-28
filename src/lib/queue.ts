@@ -1,18 +1,30 @@
 import { Queue, Worker, Job } from 'bullmq';
-import { getRedis, isRedisAvailable } from './redis';
+import Redis from 'ioredis';
+import { isRedisAvailable } from './redis';
 import { sql } from './db';
+import { config } from './config';
 
 const QUEUE_NAME = 'webhooks';
 
 let webhookQueue: Queue | null = null;
 let webhookWorker: Worker | null = null;
 
+function createBullMQConnection(): Redis {
+  return new Redis({
+    host: config.redis.host,
+    port: config.redis.port,
+    password: config.redis.password || undefined,
+    db: config.redis.db,
+    maxRetriesPerRequest: null,
+  });
+}
+
 export function getWebhookQueue(): Queue | null {
   if (!isRedisAvailable()) return null;
 
   if (!webhookQueue) {
     webhookQueue = new Queue(QUEUE_NAME, {
-      connection: getRedis(),
+      connection: createBullMQConnection(),
       defaultJobOptions: {
         attempts: 5,
         backoff: {
@@ -129,7 +141,7 @@ export function initWebhookWorker(): void {
   if (webhookWorker) return;
 
   webhookWorker = new Worker<StripeWebhookPayload>(QUEUE_NAME, processStripeWebhook, {
-    connection: getRedis(),
+    connection: createBullMQConnection(),
     concurrency: 5,
   });
 
