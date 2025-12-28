@@ -7,6 +7,25 @@ import { getCache, setCache, isRedisAvailable } from '../lib/redis';
 const adminRoutes = new Hono();
 
 const COUNTS_CACHE_TTL = 60;
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isValidUUID(id: string): boolean {
+  return UUID_REGEX.test(id);
+}
+
+function maskEmail(email: string): string {
+  const [local, domain] = email.split('@');
+  if (!domain) return '***@***';
+  const maskedLocal = local.length > 2 ? local[0] + '***' + local[local.length - 1] : '***';
+  return `${maskedLocal}@${domain}`;
+}
+
+function sanitizeCSVValue(value: string): string {
+  if (/^[=+\-@\t\r]/.test(value)) {
+    return `'${value}`;
+  }
+  return value;
+}
 
 async function isSuperAdmin(sessionToken: string): Promise<auth.User | null> {
   if (!sessionToken) return null;
@@ -170,10 +189,14 @@ adminRoutes.get('/users', async (c) => {
 
   const cursor = c.req.query('cursor') || '';
   const limit = Math.min(parseInt(c.req.query('limit') || '50'), 100);
-  const search = c.req.query('search') || '';
+  const search = (c.req.query('search') || '').slice(0, 100);
   const status = c.req.query('status') || '';
   const sortBy = c.req.query('sortBy') || 'created_at';
   const sortOrder = c.req.query('sortOrder') === 'asc' ? 'ASC' : 'DESC';
+
+  if (cursor && !isValidUUID(cursor)) {
+    return c.json({ error: 'Invalid cursor format' }, 400);
+  }
 
   const validSortFields = ['created_at', 'email', 'name', 'subscription_status'];
   const safeSortBy = validSortFields.includes(sortBy) ? sortBy : 'created_at';
@@ -257,6 +280,10 @@ adminRoutes.get('/users/:id', async (c) => {
   if (!admin) return c.json({ error: 'Unauthorized' }, 401);
 
   const userId = c.req.param('id');
+
+  if (!isValidUUID(userId)) {
+    return c.json({ error: 'Invalid user ID format' }, 400);
+  }
 
   try {
     const [user] = await sql`
@@ -400,6 +427,15 @@ adminRoutes.post('/users/bulk', async (c) => {
     return c.json({ error: 'Maximum 100 users per bulk action' }, 400);
   }
 
+  const invalidIds = userIds.filter((id) => typeof id !== 'string' || !isValidUUID(id));
+  if (invalidIds.length > 0) {
+    return c.json({ error: 'Invalid user ID format in list' }, 400);
+  }
+
+  if (userIds.includes(admin.id)) {
+    return c.json({ error: 'Cannot perform bulk action on yourself' }, 400);
+  }
+
   const validActions = ['update_status', 'update_user_type', 'delete'];
   if (!validActions.includes(action)) {
     return c.json({ error: 'Invalid action' }, 400);
@@ -416,7 +452,7 @@ adminRoutes.post('/users/bulk', async (c) => {
       const result = await sql`
         UPDATE users 
         SET subscription_status = ${value}, updated_at = NOW()
-        WHERE id = ANY(${userIds}::uuid[])
+        WHERE id = ANY(${userIds}::uuid[]) AND id != ${admin.id}
       `;
       affected = result.count;
     } else if (action === 'update_user_type') {
@@ -427,20 +463,24 @@ adminRoutes.post('/users/bulk', async (c) => {
       const result = await sql`
         UPDATE users 
         SET user_type = ${value}, updated_at = NOW()
-        WHERE id = ANY(${userIds}::uuid[])
+        WHERE id = ANY(${userIds}::uuid[]) AND id != ${admin.id}
       `;
       affected = result.count;
     } else if (action === 'delete') {
-      await sql`DELETE FROM sessions WHERE user_id = ANY(${userIds}::uuid[])`;
-      await sql`DELETE FROM messages WHERE conversation_id IN (SELECT id FROM conversations WHERE user_id = ANY(${userIds}::uuid[]))`;
-      await sql`DELETE FROM conversations WHERE user_id = ANY(${userIds}::uuid[])`;
-      await sql`DELETE FROM usage_logs WHERE user_id = ANY(${userIds}::uuid[])`;
-      await sql`DELETE FROM team_members WHERE user_id = ANY(${userIds}::uuid[])`;
-      const result = await sql`DELETE FROM users WHERE id = ANY(${userIds}::uuid[])`;
+      const safeUserIds = userIds.filter((id) => id !== admin.id);
+      if (safeUserIds.length === 0) {
+        return c.json({ error: 'No valid users to delete' }, 400);
+      }
+      await sql`DELETE FROM sessions WHERE user_id = ANY(${safeUserIds}::uuid[])`;
+      await sql`DELETE FROM messages WHERE conversation_id IN (SELECT id FROM conversations WHERE user_id = ANY(${safeUserIds}::uuid[]))`;
+      await sql`DELETE FROM conversations WHERE user_id = ANY(${safeUserIds}::uuid[])`;
+      await sql`DELETE FROM usage_logs WHERE user_id = ANY(${safeUserIds}::uuid[])`;
+      await sql`DELETE FROM team_members WHERE user_id = ANY(${safeUserIds}::uuid[])`;
+      const result = await sql`DELETE FROM users WHERE id = ANY(${safeUserIds}::uuid[])`;
       affected = result.count;
     }
 
-    console.log(`[Admin] Bulk action ${action} on ${affected} users by ${admin.email}`);
+    console.log(`[Admin] Bulk action ${action} on ${affected} users by ${maskEmail(admin.email)}`);
 
     return c.json({
       success: true,
@@ -503,8 +543,11 @@ adminRoutes.get('/users/export', async (c) => {
         const row = headers.map((h) => {
           const val = user[h];
           if (val === null || val === undefined) return '';
-          const str = String(val);
-          return str.includes(',') || str.includes('"') ? `"${str.replace(/"/g, '""')}"` : str;
+          let str = String(val);
+          str = sanitizeCSVValue(str);
+          return str.includes(',') || str.includes('"') || str.includes('\n')
+            ? `"${str.replace(/"/g, '""')}"`
+            : str;
         });
         csvRows.push(row.join(','));
       }
@@ -516,6 +559,8 @@ adminRoutes.get('/users/export', async (c) => {
         },
       });
     }
+
+    console.log(`[Admin] Export ${users.length} users (${format}) by ${maskEmail(admin.email)}`);
 
     return c.json({
       users,
