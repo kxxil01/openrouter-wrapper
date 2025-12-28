@@ -136,22 +136,27 @@ Complete subscription lifecycle handling with enterprise-grade reliability:
 - [x] **Auto-scroll Fix** - Users can scroll up during AI response generation
 - [x] **OpenRouter Error Popup** - Toast notification for API 5xx errors with retry info
 
-### Pending Items
+### Team Invite Emails ✅
 
-#### Team Invite Emails (Medium Priority)
+- [x] **Resend Integration** - Email service via Resend API (`src/lib/email.ts`)
+- [x] **Beautiful HTML Templates** - Gradient-styled invite emails with CTA button
+- [x] **Security Hardening**:
+  - Cryptographically secure tokens (`crypto.randomBytes`)
+  - XSS prevention with HTML escaping
+  - Rate limiting (20 invites/hour per user)
+  - Token format validation
+  - Case-insensitive email matching
+  - PII masking in logs
 
-**Status:** [ ] Not Started
-**Why:** Invites generate tokens but no email sent - users must manually share links
+### Admin Dashboard Improvements ✅
 
-#### Admin Dashboard Improvements (Low Priority)
-
-**Status:** [ ] Not Started
-**Improvements needed:**
-
-- [ ] Cursor-based pagination instead of offset
-- [ ] Redis-cached user counts
-- [ ] Search/filter users
-- [ ] Bulk actions (suspend, upgrade, etc.)
+- [x] **Cursor-based Pagination** - Efficient pagination for large user lists
+- [x] **Redis-cached Stats** - 60-second TTL cache for user counts and stats
+- [x] **Advanced Filtering** - Filter by status, sort by multiple fields
+- [x] **Bulk Actions** - Update status, change roles, delete users in bulk
+- [x] **Activity Dashboard** - Real-time signups, conversations, hourly activity chart
+- [x] **Export Functionality** - Export users to CSV or JSON format
+- [x] **User Selection** - Multi-select with checkboxes for bulk operations
 
 ---
 

@@ -33,7 +33,16 @@ export {
   shareConversationWithTeam,
   removeConversationFromTeam,
 } from './teams';
-export { getAdminStats, getUsers, getUserDetails, updateUser, getBillingStats } from './admin';
+export {
+  getAdminStats,
+  getUsers,
+  getUserDetails,
+  updateUser,
+  getBillingStats,
+  bulkUpdateUsers,
+  exportUsers,
+  getActivity,
+} from './admin';
 export { getUserPermissions } from './permissions';
 export {
   getBillingConfig,
