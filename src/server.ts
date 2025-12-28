@@ -20,6 +20,7 @@ import billingRoutes from './routes/billing';
 
 import { config } from './lib/config';
 import { initRedis } from './lib/redis';
+import { initWebhookWorker } from './lib/queue';
 import { apiRateLimit, chatRateLimit, authRateLimit } from './middleware/rateLimit';
 
 const app = new Hono();
@@ -123,6 +124,7 @@ app.get('/*', async (c) => {
 initRedis().then((connected) => {
   if (connected) {
     console.log(`Redis cache enabled`);
+    initWebhookWorker();
   } else {
     console.log(`Redis not available - using PostgreSQL for sessions`);
   }
