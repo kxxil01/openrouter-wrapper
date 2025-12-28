@@ -20,6 +20,7 @@ import billingRoutes from './routes/billing';
 
 import { config } from './lib/config';
 import { initRedis } from './lib/redis';
+import { apiRateLimit, chatRateLimit, authRateLimit } from './middleware/rateLimit';
 
 const app = new Hono();
 
@@ -46,6 +47,11 @@ app.use(
 app.get('/api/health', (c) => {
   return c.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+app.use('/auth/*', authRateLimit);
+app.use('/api/auth/*', authRateLimit);
+app.use('/api/chat/*', chatRateLimit);
+app.use('/api/*', apiRateLimit);
 
 app.route('/auth', authRoutes);
 app.route('/api/auth', authRoutes);

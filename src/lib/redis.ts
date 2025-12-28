@@ -4,6 +4,7 @@ import { config } from './config';
 const REDIS_HOST = config.redis.host;
 const REDIS_PORT = config.redis.port;
 const REDIS_PASSWORD = config.redis.password;
+const REDIS_DB = config.redis.db;
 
 let redis: Redis | null = null;
 
@@ -13,6 +14,7 @@ export function getRedis(): Redis {
       host: REDIS_HOST,
       port: REDIS_PORT,
       password: REDIS_PASSWORD || undefined,
+      db: REDIS_DB,
       maxRetriesPerRequest: 3,
       retryStrategy: (times) => {
         if (times > 3) {
