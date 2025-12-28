@@ -1,9 +1,10 @@
 import { Hono } from 'hono';
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie';
 import * as auth from '../lib/auth';
+import { config } from '../lib/config';
 
-const DISABLE_PAYWALL = process.env.DISABLE_PAYWALL === 'true';
-const AUTH_ENABLED = process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET;
+const DISABLE_PAYWALL = config.paywall.disabled;
+const AUTH_ENABLED = config.auth.google.clientId && config.auth.google.clientSecret;
 
 const authRoutes = new Hono();
 
@@ -37,9 +38,9 @@ authRoutes.get('/callback', async (c) => {
 
     setCookie(c, 'session', sessionToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: config.nodeEnv === 'production',
       sameSite: 'Lax',
-      maxAge: 7 * 24 * 60 * 60,
+      maxAge: config.auth.sessionExpiryDays * 24 * 60 * 60,
       path: '/',
     });
 
@@ -71,18 +72,24 @@ authRoutes.get('/me', async (c) => {
     return c.json({ user: null });
   }
 
+  const isSuperAdmin = user.user_type === 'superadmin';
+  const bypassPaywall = isSuperAdmin || DISABLE_PAYWALL;
+
   return c.json({
     user: {
       id: user.id,
       email: user.email,
       name: user.name,
       picture: user.picture,
-      subscription_status: DISABLE_PAYWALL ? 'active' : user.subscription_status,
+      user_type: user.user_type,
+      subscription_status: bypassPaywall ? 'active' : user.subscription_status,
+      subscription_tier: bypassPaywall ? 'pro' : user.subscription_tier,
+      subscription_scope: isSuperAdmin ? 'organization' : user.subscription_scope,
       subscription_expires_at: user.subscription_expires_at,
       message_count: user.message_count || 0,
-      free_messages_remaining: Math.max(0, 5 - (user.message_count || 0)),
+      free_messages_remaining: bypassPaywall ? 999 : Math.max(0, 5 - (user.message_count || 0)),
     },
-    paywall_disabled: DISABLE_PAYWALL,
+    paywall_disabled: bypassPaywall,
   });
 });
 

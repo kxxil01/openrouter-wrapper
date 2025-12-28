@@ -4,12 +4,40 @@ import { getCookie } from 'hono/cookie';
 import { v7 as uuidv7 } from 'uuid';
 import * as auth from '../lib/auth';
 import { sql } from '../lib/db';
+import { config } from '../lib/config';
 
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-const DEFAULT_MODEL_ID = process.env.DEFAULT_MODEL_ID || 'deepseek/deepseek-r1-0528:free';
-const DISABLE_PAYWALL = process.env.DISABLE_PAYWALL === 'true';
-const FREE_MESSAGE_LIMIT = 5;
-const TITLE_GENERATION_THRESHOLDS = [1, 3, 5];
+const OPENROUTER_API_KEY = config.openRouter.apiKey;
+const DEFAULT_MODEL_ID = config.openRouter.defaultModel;
+const DISABLE_PAYWALL = config.paywall.disabled;
+const FREE_MESSAGE_LIMIT = config.paywall.freeMessageLimit;
+const TITLE_GENERATION_THRESHOLDS = config.paywall.titleGenerationThresholds;
+
+interface UsageInfo {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+}
+
+async function logUsage(
+  userId: string | null,
+  conversationId: string | null,
+  modelId: string,
+  usage: UsageInfo,
+  usedCustomKey: boolean
+): Promise<void> {
+  if (!userId) return;
+  try {
+    await sql`
+      INSERT INTO usage_logs (user_id, conversation_id, model_id, prompt_tokens, completion_tokens, total_tokens, used_custom_key)
+      VALUES (${userId}, ${conversationId}, ${modelId}, ${usage.promptTokens}, ${usage.completionTokens}, ${usage.totalTokens}, ${usedCustomKey})
+    `;
+    await sql`
+      UPDATE users SET total_tokens_used = COALESCE(total_tokens_used, 0) + ${usage.totalTokens} WHERE id = ${userId}
+    `;
+  } catch (error) {
+    console.error('[Usage] Failed to log usage:', error);
+  }
+}
 
 function getTodayUTC(): string {
   return new Date().toISOString().split('T')[0];
@@ -21,9 +49,11 @@ async function streamOpenRouterCompletion(
   onChunk: (content: string) => void,
   onComplete: (fullContent: string) => void,
   onError: (error: Error) => void,
-  temperature: number = 0.7
+  temperature: number = 0.7,
+  customApiKey?: string | null
 ): Promise<void> {
-  if (!OPENROUTER_API_KEY) {
+  const apiKey = customApiKey || OPENROUTER_API_KEY;
+  if (!apiKey) {
     onError(new Error('OpenRouter API key is not configured'));
     return;
   }
@@ -33,9 +63,9 @@ async function streamOpenRouterCompletion(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-        'HTTP-Referer': 'https://claude-opus-wrapper.com',
-        'X-Title': 'Claude Opus Wrapper',
+        Authorization: `Bearer ${apiKey}`,
+        'HTTP-Referer': 'https://chat.free-ai.dev',
+        'X-Title': 'Free AI Chat',
       },
       body: JSON.stringify({
         model,
@@ -103,8 +133,8 @@ async function generateConversationTitle(
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-        'HTTP-Referer': 'https://claude-opus-wrapper.com',
-        'X-Title': 'Claude Opus Wrapper',
+        'HTTP-Referer': 'https://chat.free-ai.dev',
+        'X-Title': 'Free AI Chat',
       },
       body: JSON.stringify({
         model: 'google/gemini-2.0-flash-exp:free',
@@ -144,12 +174,17 @@ chatRoutes.post('/completions', async (c) => {
   let userId: string | null = null;
   let subscriptionStatus: string = 'free';
   let messageCount: number = 0;
+  let userApiKey: string | null = null;
+
+  let isSuperAdmin = false;
 
   if (sessionToken) {
     const user = await auth.validateSession(sessionToken);
     if (user) {
       userId = user.id;
       subscriptionStatus = user.subscription_status || 'free';
+      userApiKey = user.openrouter_api_key || null;
+      isSuperAdmin = user.user_type === 'superadmin';
 
       const todayUTC = getTodayUTC();
       const resetDate = user.message_count_reset_at
@@ -165,7 +200,14 @@ chatRoutes.post('/completions', async (c) => {
     }
   }
 
-  if (!DISABLE_PAYWALL && subscriptionStatus !== 'active' && messageCount >= FREE_MESSAGE_LIMIT) {
+  const bypassPaywall = isSuperAdmin || DISABLE_PAYWALL;
+
+  if (
+    !bypassPaywall &&
+    !userApiKey &&
+    subscriptionStatus !== 'active' &&
+    messageCount >= FREE_MESSAGE_LIMIT
+  ) {
     return c.json(
       {
         error: {
@@ -282,6 +324,20 @@ chatRoutes.post('/completions', async (c) => {
               );
             }
 
+            const promptTokensEstimate = JSON.stringify(apiMessages).length / 4;
+            const completionTokensEstimate = content.length / 4;
+            await logUsage(
+              userId,
+              convId,
+              modelId,
+              {
+                promptTokens: Math.ceil(promptTokensEstimate),
+                completionTokens: Math.ceil(completionTokensEstimate),
+                totalTokens: Math.ceil(promptTokensEstimate + completionTokensEstimate),
+              },
+              !!userApiKey
+            );
+
             console.log(`[${requestId}] Saved assistant response to database`);
           } catch (dbError) {
             console.error(`[${requestId}] Error saving to database:`, dbError);
@@ -295,16 +351,21 @@ chatRoutes.post('/completions', async (c) => {
             }),
           });
         },
-        temperature
+        temperature,
+        userApiKey
       );
     });
   } else {
+    const apiKey = userApiKey || OPENROUTER_API_KEY;
+    if (!apiKey) {
+      return c.json({ error: 'OpenRouter API key is not configured' }, 500);
+    }
     try {
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+          Authorization: `Bearer ${apiKey}`,
           'HTTP-Referer': 'https://claude-opus-wrapper.com',
           'X-Title': 'Claude Opus Wrapper',
         },
@@ -355,6 +416,21 @@ chatRoutes.post('/completions', async (c) => {
         } catch (dbError) {
           console.error(`[${requestId}] Error saving to database:`, dbError);
         }
+      }
+
+      const usage = data.usage;
+      if (usage) {
+        await logUsage(
+          userId,
+          conversation_id,
+          modelId,
+          {
+            promptTokens: usage.prompt_tokens || 0,
+            completionTokens: usage.completion_tokens || 0,
+            totalTokens: usage.total_tokens || 0,
+          },
+          !!userApiKey
+        );
       }
 
       return c.json(data);

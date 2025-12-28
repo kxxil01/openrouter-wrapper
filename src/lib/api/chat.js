@@ -64,7 +64,7 @@ export async function sendMessageToClaudeAPI(
                 streamedContent += content;
                 onStreamChunk(content);
               }
-            } catch (_e) {
+            } catch {
               // Skip invalid JSON
             }
           }

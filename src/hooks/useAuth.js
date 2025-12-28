@@ -28,11 +28,21 @@ export function useAuth() {
     window.location.href = getLogoutUrl();
   };
 
+  const refreshUser = async () => {
+    try {
+      const userData = await getCurrentUser();
+      setUser(userData);
+    } catch (error) {
+      console.error('Error refreshing user:', error);
+    }
+  };
+
   return {
     user,
     isLoading,
     isAuthenticated: !!user,
     login,
     logout,
+    refreshUser,
   };
 }

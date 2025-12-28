@@ -1,6 +1,7 @@
 import postgres from 'postgres';
+import { config } from './config';
 
-export const sql = postgres(process.env.DATABASE_URL!, {
+export const sql = postgres(config.database.url, {
   ssl: { rejectUnauthorized: false },
   max: 10,
   idle_timeout: 20,

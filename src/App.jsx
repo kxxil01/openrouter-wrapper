@@ -6,7 +6,11 @@ import PaywallModal from './components/PaywallModal';
 import SearchModal from './components/SearchModal';
 import SystemPromptModal from './components/SystemPromptModal';
 import SharedConversation from './components/SharedConversation';
+import ProfileModal from './components/ProfileModal';
+import TeamModal from './components/TeamModal';
+import AdminDashboard from './components/AdminDashboard';
 import * as api from './lib/api';
+import { verifySubscription } from './lib/api';
 import {
   useModels,
   useConversations,
@@ -21,8 +25,12 @@ function App() {
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [showSystemPrompt, setShowSystemPrompt] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+  const [showTeams, setShowTeams] = useState(false);
+  const [activeTeam, setActiveTeam] = useState(null);
+  const [showAdmin, setShowAdmin] = useState(false);
 
-  const { user, isLoading: isAuthLoading, login, logout } = useAuth();
+  const { user, isLoading: isAuthLoading, login, logout, refreshUser } = useAuth();
   const { models, selectedModel, setSelectedModel } = useModels();
   const {
     conversations,
@@ -69,6 +77,20 @@ function App() {
   });
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('checkout') === 'success' && user) {
+      verifySubscription()
+        .then((result) => {
+          if (result.updated) {
+            refreshUser();
+          }
+          window.history.replaceState({}, '', window.location.pathname);
+        })
+        .catch(console.error);
+    }
+  }, [user, refreshUser]);
+
+  useEffect(() => {
     if (currentConversation) {
       fetchMessages(currentConversation.id);
       if (currentConversation.model_id) {
@@ -80,7 +102,7 @@ function App() {
     } else {
       clearMessages();
     }
-  }, [currentConversation, fetchMessages, clearMessages]);
+  }, [currentConversation, fetchMessages, clearMessages, models, setSelectedModel]);
 
   const handleSelectConversation = useCallback(
     async (conversationId) => {
@@ -178,6 +200,10 @@ function App() {
         onDeleteFolder={deleteFolder}
         onMoveToFolder={handleMoveToFolder}
         onShareConversation={fetchConversations}
+        onOpenProfile={() => setShowProfile(true)}
+        onOpenTeams={() => setShowTeams(true)}
+        activeTeam={activeTeam}
+        onOpenAdmin={() => setShowAdmin(true)}
       />
       <ChatInterface
         messages={messages}
@@ -206,6 +232,13 @@ function App() {
         currentPrompt={currentConversation?.system_prompt}
         onSave={handleSaveSystemPrompt}
       />
+      <ProfileModal isOpen={showProfile} onClose={() => setShowProfile(false)} />
+      <TeamModal
+        isOpen={showTeams}
+        onClose={() => setShowTeams(false)}
+        onTeamSelect={setActiveTeam}
+      />
+      <AdminDashboard isOpen={showAdmin} onClose={() => setShowAdmin(false)} />
     </div>
   );
 }

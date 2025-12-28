@@ -1,7 +1,8 @@
 import postgres from 'postgres';
 import { migrations } from './migrations';
+import { config } from './lib/config';
 
-const DATABASE_URL = process.env.DATABASE_URL;
+const DATABASE_URL = config.database.url;
 
 if (!DATABASE_URL) {
   console.error('DATABASE_URL environment variable is required');

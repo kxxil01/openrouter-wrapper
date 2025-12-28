@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
+import { config } from '../lib/config';
 
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const OPENROUTER_API_KEY = config.openRouter.apiKey;
 
 interface ModelData {
   id: string;

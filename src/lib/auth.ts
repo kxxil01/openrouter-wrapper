@@ -1,14 +1,14 @@
 import postgres from 'postgres';
+import { config } from './config';
 
-const sql = postgres(process.env.DATABASE_URL!, {
+const sql = postgres(config.database.url, {
   ssl: { rejectUnauthorized: false },
 });
 
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
-const GOOGLE_REDIRECT_URI =
-  process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3001/auth/callback';
-const SESSION_EXPIRY_DAYS = 7;
+const GOOGLE_CLIENT_ID = config.auth.google.clientId;
+const GOOGLE_CLIENT_SECRET = config.auth.google.clientSecret;
+const GOOGLE_REDIRECT_URI = config.auth.google.redirectUri;
+const SESSION_EXPIRY_DAYS = config.auth.sessionExpiryDays;
 
 export interface GoogleUser {
   id: string;
@@ -34,6 +34,13 @@ export interface User {
   created_at: Date;
   updated_at: Date;
   last_login_at?: Date;
+  stripe_customer_id?: string;
+  stripe_subscription_id?: string;
+  openrouter_api_key?: string;
+  total_tokens_used?: number;
+  user_type: 'user' | 'admin' | 'superadmin';
+  subscription_tier: 'free' | 'pro';
+  subscription_scope: 'individual' | 'team' | 'organization';
 }
 
 export interface Session {
@@ -155,7 +162,9 @@ export async function validateSession(token: string): Promise<User | null> {
     SELECT 
       u.id, u.google_id, u.email, u.name, u.picture, u.locale, u.hd, 
       u.subscription_status, u.subscription_expires_at, u.message_count, u.message_count_reset_at,
-      u.created_at, u.updated_at, u.last_login_at
+      u.created_at, u.updated_at, u.last_login_at,
+      u.user_type, u.subscription_tier, u.subscription_scope,
+      u.stripe_customer_id, u.stripe_subscription_id, u.openrouter_api_key, u.total_tokens_used
     FROM sessions s
     JOIN users u ON s.user_id = u.id
     WHERE s.token_hash = ${tokenHash} AND s.expires_at > NOW()
@@ -181,6 +190,13 @@ export async function validateSession(token: string): Promise<User | null> {
     created_at: row.created_at,
     updated_at: row.updated_at,
     last_login_at: row.last_login_at,
+    user_type: row.user_type || 'user',
+    subscription_tier: row.subscription_tier || 'free',
+    subscription_scope: row.subscription_scope || 'individual',
+    stripe_customer_id: row.stripe_customer_id,
+    stripe_subscription_id: row.stripe_subscription_id,
+    openrouter_api_key: row.openrouter_api_key,
+    total_tokens_used: row.total_tokens_used || 0,
   };
 }
 
