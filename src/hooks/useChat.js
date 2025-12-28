@@ -14,6 +14,7 @@ export function useChat({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [showPaywall, setShowPaywall] = useState(false);
+  const [retryInfo, setRetryInfo] = useState(null);
 
   const streamingContentRef = useRef('');
   const streamingUpdateTimeoutRef = useRef(null);
@@ -155,6 +156,11 @@ export function useChat({
           async (streamError) => {
             clearStreamingTimeout(true);
             console.error('Stream error:', streamError);
+            const errorMsg = streamError?.message || '';
+            const isOpenRouterError =
+              errorMsg.includes('OpenRouter API error: 5') ||
+              errorMsg.includes('Internal Server Error');
+
             if (streamError?.message?.includes('Subscription required')) {
               if (conversationId) {
                 const lastUserMsg = localMessages[localMessages.length - 1];
@@ -164,8 +170,15 @@ export function useChat({
               }
               setMessages(localMessages.slice(0, -1));
               setShowPaywall(true);
+            } else if (isOpenRouterError) {
+              setRetryInfo({
+                type: 'openrouter_error',
+                message: 'OpenRouter is experiencing issues. Please try again.',
+                originalError: errorMsg,
+              });
+              setMessages((prev) => prev.filter((m) => !m.isStreaming));
             } else {
-              setError(streamError?.message || 'Failed to stream response');
+              setError(errorMsg || 'Failed to stream response');
             }
             setIsLoading(false);
           },
@@ -236,6 +249,7 @@ export function useChat({
     async (messageIndex, newContent) => {
       if (!currentConversation?.id) return;
       setError(null);
+      setRetryInfo(null);
       setIsLoading(true);
 
       try {
@@ -264,8 +278,19 @@ export function useChat({
           (err) => {
             console.error('Streaming error:', err);
             setMessages((prev) => prev.filter((m) => !m.isStreaming));
+            const errorMsg = err?.message || '';
+            const isOpenRouterError =
+              errorMsg.includes('OpenRouter API error: 5') ||
+              errorMsg.includes('Internal Server Error');
+
             if (err?.message?.includes('Subscription required')) {
               setShowPaywall(true);
+            } else if (isOpenRouterError) {
+              setRetryInfo({
+                type: 'openrouter_error',
+                message: 'OpenRouter is experiencing issues. Please try again.',
+                originalError: errorMsg,
+              });
             } else {
               setError('Failed to get response');
             }
@@ -309,6 +334,7 @@ export function useChat({
       if (!lastAssistantMessage || lastAssistantMessage.role !== 'assistant') return;
 
       setError(null);
+      setRetryInfo(null);
       setIsLoading(true);
 
       try {
@@ -334,8 +360,19 @@ export function useChat({
           (err) => {
             console.error('Regenerate error:', err);
             setMessages((prev) => prev.filter((m) => !m.isStreaming));
+            const errorMsg = err?.message || '';
+            const isOpenRouterError =
+              errorMsg.includes('OpenRouter API error: 5') ||
+              errorMsg.includes('Internal Server Error');
+
             if (err?.message?.includes('Subscription required')) {
               setShowPaywall(true);
+            } else if (isOpenRouterError) {
+              setRetryInfo({
+                type: 'openrouter_error',
+                message: 'OpenRouter is experiencing issues. Please try again.',
+                originalError: errorMsg,
+              });
             } else {
               setError('Failed to regenerate response');
             }
@@ -377,5 +414,7 @@ export function useChat({
     sendMessage,
     editMessage,
     regenerateResponse,
+    retryInfo,
+    clearRetryInfo: useCallback(() => setRetryInfo(null), []),
   };
 }

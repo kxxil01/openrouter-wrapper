@@ -4,9 +4,11 @@ function MessageInput({ onSendMessage, isLoading }) {
   const [message, setMessage] = useState('');
   const [images, setImages] = useState([]);
   const [files, setFiles] = useState([]);
+  const [showAttachMenu, setShowAttachMenu] = useState(false);
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
   const docInputRef = useRef(null);
+  const attachMenuRef = useRef(null);
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -15,6 +17,16 @@ function MessageInput({ onSendMessage, isLoading }) {
       textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`;
     }
   }, [message]);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (attachMenuRef.current && !attachMenuRef.current.contains(e.target)) {
+        setShowAttachMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleImageUpload = (e) => {
     const files = Array.from(e.target.files || []);
@@ -166,12 +178,12 @@ function MessageInput({ onSendMessage, isLoading }) {
           onChange={handleDocUpload}
           className="hidden"
         />
-        <div className="absolute left-3 bottom-3 flex gap-1">
+        <div className="absolute left-3 bottom-3" ref={attachMenuRef}>
           <button
             type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="p-2 text-gpt-muted hover:text-gpt-text transition-colors"
-            title="Upload image"
+            onClick={() => setShowAttachMenu(!showAttachMenu)}
+            className="p-2 text-gpt-muted hover:text-gpt-text transition-colors rounded-full hover:bg-gpt-hover"
+            title="Attach files"
           >
             <svg
               width="20"
@@ -181,29 +193,59 @@ function MessageInput({ onSendMessage, isLoading }) {
               stroke="currentColor"
               strokeWidth="2"
             >
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-              <circle cx="8.5" cy="8.5" r="1.5" />
-              <polyline points="21 15 16 10 5 21" />
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
             </svg>
           </button>
-          <button
-            type="button"
-            onClick={() => docInputRef.current?.click()}
-            className="p-2 text-gpt-muted hover:text-gpt-text transition-colors"
-            title="Upload document"
-          >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-              <polyline points="14 2 14 8 20 8" />
-            </svg>
-          </button>
+          {showAttachMenu && (
+            <div className="absolute bottom-12 left-0 bg-gpt-sidebar border border-gpt-border rounded-xl shadow-xl py-2 min-w-[180px] z-50">
+              <button
+                type="button"
+                onClick={() => {
+                  fileInputRef.current?.click();
+                  setShowAttachMenu(false);
+                }}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-gpt-text hover:bg-gpt-hover transition-colors text-left"
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  className="text-gpt-muted"
+                >
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                  <circle cx="8.5" cy="8.5" r="1.5" />
+                  <polyline points="21 15 16 10 5 21" />
+                </svg>
+                <span className="text-sm">Upload image</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  docInputRef.current?.click();
+                  setShowAttachMenu(false);
+                }}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-gpt-text hover:bg-gpt-hover transition-colors text-left"
+              >
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  className="text-gpt-muted"
+                >
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                </svg>
+                <span className="text-sm">Upload document</span>
+              </button>
+            </div>
+          )}
         </div>
         <textarea
           ref={textareaRef}
@@ -211,7 +253,7 @@ function MessageInput({ onSendMessage, isLoading }) {
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Message..."
-          className="w-full resize-none border-0 bg-transparent py-4 pl-24 pr-14 focus:ring-0 focus:outline-none text-[15px] text-gpt-text placeholder-gpt-muted/70 rounded-3xl min-h-[56px] max-h-[200px]"
+          className="w-full resize-none border-0 bg-transparent py-4 pl-14 pr-14 focus:ring-0 focus:outline-none text-[15px] text-gpt-text placeholder-gpt-muted/70 rounded-3xl min-h-[56px] max-h-[200px]"
           rows={1}
           disabled={isLoading}
         />

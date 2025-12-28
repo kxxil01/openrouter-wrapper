@@ -54,6 +54,8 @@ function App() {
     sendMessage,
     editMessage,
     regenerateResponse,
+    retryInfo,
+    clearRetryInfo,
   } = useChat({
     currentConversation,
     setCurrentConversation,
@@ -239,6 +241,48 @@ function App() {
         onTeamSelect={setActiveTeam}
       />
       <AdminDashboard isOpen={showAdmin} onClose={() => setShowAdmin(false)} />
+      {retryInfo && (
+        <div className="fixed bottom-4 right-4 z-50 animate-in slide-in-from-bottom-4 duration-300">
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 shadow-xl max-w-sm backdrop-blur-sm">
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-amber-500/20 rounded-lg shrink-0">
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  className="text-amber-400"
+                >
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                  <line x1="12" y1="9" x2="12" y2="13" />
+                  <line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <h4 className="text-amber-300 font-medium text-sm">API Error</h4>
+                <p className="text-amber-200/80 text-xs mt-1">{retryInfo.message}</p>
+              </div>
+              <button
+                onClick={clearRetryInfo}
+                className="p-1 text-amber-400/60 hover:text-amber-300 transition-colors shrink-0"
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

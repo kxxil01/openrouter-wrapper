@@ -53,6 +53,19 @@ export const config = {
   cors: {
     origins: (process.env.CORS_ORIGINS || 'http://localhost:3001,http://localhost:5173').split(','),
   },
+
+  redis: {
+    host: process.env.REDIS_HOST || 'localhost',
+    port: parseInt(process.env.REDIS_PORT || '6379', 10),
+    password: process.env.REDIS_PASSWORD || '',
+    db: parseInt(process.env.REDIS_DB || '0', 10),
+  },
+
+  email: {
+    resendApiKey: process.env.RESEND_API_KEY || '',
+    fromAddress: process.env.EMAIL_FROM_ADDRESS || 'noreply@chat.free-ai.dev',
+    fromName: process.env.EMAIL_FROM_NAME || 'OpenRouter Chat',
+  },
 };
 
 export type Config = typeof config;

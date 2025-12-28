@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useCallback } from 'react';
 import MessageList from './MessageList';
 import MessageInput from './MessageInput';
 import ModelSelector from './ModelSelector';
@@ -19,9 +19,28 @@ function ChatInterface({
   onOpenSystemPrompt,
 }) {
   const messagesEndRef = useRef(null);
+  const scrollContainerRef = useRef(null);
+  const userScrolledUpRef = useRef(false);
+  const lastMessageCountRef = useRef(messages.length);
+
+  const handleScroll = useCallback(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    userScrolledUpRef.current = distanceFromBottom > 100;
+  }, []);
 
   useEffect(() => {
-    if (messagesEndRef.current) {
+    if (messages.length > lastMessageCountRef.current) {
+      userScrolledUpRef.current = false;
+    }
+    lastMessageCountRef.current = messages.length;
+  }, [messages.length]);
+
+  useEffect(() => {
+    if (messagesEndRef.current && !userScrolledUpRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages]);
@@ -93,7 +112,7 @@ function ChatInterface({
           <h2 className="text-2xl font-medium text-gpt-text mb-2">How can I help you today?</h2>
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto">
+        <div ref={scrollContainerRef} className="flex-1 overflow-y-auto" onScroll={handleScroll}>
           <MessageList
             messages={messages}
             onEditMessage={onEditMessage}

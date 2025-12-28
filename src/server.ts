@@ -19,6 +19,9 @@ import permissionRoutes from './routes/permissions';
 import billingRoutes from './routes/billing';
 
 import { config } from './lib/config';
+import { initRedis } from './lib/redis';
+import { initWebhookWorker } from './lib/queue';
+import { apiRateLimit, chatRateLimit, authRateLimit } from './middleware/rateLimit';
 
 const app = new Hono();
 
@@ -45,6 +48,11 @@ app.use(
 app.get('/api/health', (c) => {
   return c.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+app.use('/auth/*', authRateLimit);
+app.use('/api/auth/*', authRateLimit);
+app.use('/api/chat/*', chatRateLimit);
+app.use('/api/*', apiRateLimit);
 
 app.route('/auth', authRoutes);
 app.route('/api/auth', authRoutes);
@@ -111,6 +119,15 @@ app.get('/*', async (c) => {
   }
 
   return c.text('Not found - run "bun run build" first', 404);
+});
+
+initRedis().then((connected) => {
+  if (connected) {
+    console.log(`Redis cache enabled`);
+    initWebhookWorker();
+  } else {
+    console.log(`Redis not available - using PostgreSQL for sessions`);
+  }
 });
 
 console.log(`Server running on http://localhost:${PORT}`);

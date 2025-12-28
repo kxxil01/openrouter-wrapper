@@ -3,8 +3,10 @@ import { getCookie } from 'hono/cookie';
 import * as auth from '../lib/auth';
 import { sql } from '../lib/db';
 import { config } from '../lib/config';
+import { getCache, setCache } from '../lib/redis';
 
 const DISABLE_PAYWALL = config.paywall.disabled;
+const USAGE_CACHE_TTL = 5 * 60;
 
 const profileRoutes = new Hono();
 
@@ -108,6 +110,13 @@ profileRoutes.get('/usage', async (c) => {
 
   try {
     const period = c.req.query('period') || '30d';
+
+    const cached = await getCache<object>('usage', `${user.id}:${period}`);
+    if (cached) {
+      c.header('X-Cache', 'HIT');
+      return c.json(cached);
+    }
+
     let dateFilter: Date;
     const now = new Date();
 
@@ -169,7 +178,7 @@ profileRoutes.get('/usage', async (c) => {
       LIMIT 20
     `;
 
-    return c.json({
+    const result = {
       period,
       totals: {
         prompt_tokens: parseInt(String(totals.total_prompt_tokens)) || 0,
@@ -188,7 +197,11 @@ profileRoutes.get('/usage', async (c) => {
         requests: parseInt(String(d.requests)) || 0,
       })),
       recent_logs: recentLogs,
-    });
+    };
+
+    await setCache('usage', `${user.id}:${period}`, result, USAGE_CACHE_TTL);
+    c.header('X-Cache', 'MISS');
+    return c.json(result);
   } catch (error) {
     console.error('Error fetching usage:', error);
     return c.json({ error: 'Failed to fetch usage data' }, 500);

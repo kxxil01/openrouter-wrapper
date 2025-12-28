@@ -20,6 +20,7 @@ import * as m017 from './017_teams';
 import * as m018 from './018_user_type';
 import * as m019 from './019_subscription_tiers';
 import * as m020 from './020_performance_indexes';
+import * as m021 from './021_webhook_events';
 
 export interface Migration {
   up: (sql: Sql) => Promise<void>;
@@ -47,4 +48,5 @@ export const migrations: Migration[] = [
   m018,
   m019,
   m020,
+  m021,
 ];

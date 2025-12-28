@@ -5,6 +5,7 @@ import { sql } from '../lib/db';
 import { stripe, STRIPE_PUBLISHABLE_KEY, PRICE_CONFIG } from '../lib/stripe';
 import type { SubscriptionPlan, BillingInterval } from '../lib/stripe';
 import { config } from '../lib/config';
+import { queueStripeWebhook } from '../lib/queue';
 
 const billingRoutes = new Hono();
 
@@ -244,6 +245,9 @@ billingRoutes.post('/webhook', async (c) => {
   }
 
   try {
+    const customerId = event.data.object.customer as string | undefined;
+    const subscription = event.data.object;
+
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object;
@@ -251,82 +255,140 @@ billingRoutes.post('/webhook', async (c) => {
         const subscriptionScope = session.metadata?.subscription_scope || 'individual';
 
         if (userId && session.subscription) {
-          await sql`
-            UPDATE users 
-            SET 
-              stripe_subscription_id = ${session.subscription as string},
-              subscription_status = 'active',
-              subscription_tier = 'pro',
-              subscription_scope = ${subscriptionScope},
-              updated_at = NOW()
-            WHERE id = ${userId}
-          `;
+          const queued = await queueStripeWebhook(
+            {
+              type: event.type,
+              customerId: session.customer as string,
+              subscriptionId: session.subscription as string,
+              status: 'active',
+            },
+            event.id
+          );
+
+          if (!queued) {
+            await sql`
+              UPDATE users 
+              SET 
+                stripe_subscription_id = ${session.subscription as string},
+                subscription_status = 'active',
+                subscription_tier = 'pro',
+                subscription_scope = ${subscriptionScope},
+                updated_at = NOW()
+              WHERE id = ${userId}
+            `;
+          }
           console.log(`User ${userId} subscribed to pro ${subscriptionScope}`);
         }
         break;
       }
 
       case 'customer.subscription.updated': {
-        const subscription = event.data.object;
-        const customerId = subscription.customer as string;
-
-        const [user] = await sql`
-          SELECT id FROM users WHERE stripe_customer_id = ${customerId}
-        `;
-
-        if (user) {
-          const status = subscription.status === 'active' ? 'active' : 'cancelled';
+        if (customerId) {
           const expiresAt = subscription.current_period_end
-            ? new Date(subscription.current_period_end * 1000)
-            : null;
+            ? new Date(subscription.current_period_end * 1000).toISOString()
+            : undefined;
 
-          await sql`
-            UPDATE users 
-            SET 
-              subscription_status = ${status},
-              subscription_expires_at = ${expiresAt},
-              updated_at = NOW()
-            WHERE id = ${user.id}
-          `;
-          console.log(`User ${user.id} subscription updated to ${status}`);
+          const queued = await queueStripeWebhook(
+            {
+              type: event.type,
+              customerId,
+              status: subscription.status === 'active' ? 'active' : 'cancelled',
+              currentPeriodEnd: expiresAt,
+            },
+            event.id
+          );
+
+          if (!queued) {
+            const status = subscription.status === 'active' ? 'active' : 'cancelled';
+            await sql`
+              UPDATE users 
+              SET 
+                subscription_status = ${status},
+                subscription_expires_at = ${expiresAt ? new Date(expiresAt) : null},
+                updated_at = NOW()
+              WHERE stripe_customer_id = ${customerId}
+            `;
+          }
+          console.log(`Subscription updated for customer ${customerId}`);
         }
         break;
       }
 
       case 'customer.subscription.deleted': {
-        const subscription = event.data.object;
-        const customerId = subscription.customer as string;
+        if (customerId) {
+          const queued = await queueStripeWebhook(
+            {
+              type: event.type,
+              customerId,
+            },
+            event.id
+          );
 
-        const [user] = await sql`
-          SELECT id FROM users WHERE stripe_customer_id = ${customerId}
-        `;
-
-        if (user) {
-          await sql`
-            UPDATE users 
-            SET 
-              subscription_status = 'expired',
-              subscription_tier = 'free',
-              subscription_scope = 'individual',
-              stripe_subscription_id = NULL,
-              updated_at = NOW()
-            WHERE id = ${user.id}
-          `;
-          console.log(`User ${user.id} subscription expired`);
+          if (!queued) {
+            await sql`
+              UPDATE users 
+              SET 
+                subscription_status = 'expired',
+                subscription_tier = 'free',
+                subscription_scope = 'individual',
+                stripe_subscription_id = NULL,
+                updated_at = NOW()
+              WHERE stripe_customer_id = ${customerId}
+            `;
+          }
+          console.log(`Subscription deleted for customer ${customerId}`);
         }
         break;
       }
 
       case 'invoice.payment_failed': {
-        const invoice = event.data.object;
-        const customerId = invoice.customer as string;
+        if (customerId) {
+          const queued = await queueStripeWebhook(
+            {
+              type: event.type,
+              customerId,
+            },
+            event.id
+          );
 
-        const [user] = await sql`
-          SELECT id, email FROM users WHERE stripe_customer_id = ${customerId}
-        `;
+          if (!queued) {
+            await sql`
+              UPDATE users 
+              SET subscription_status = 'past_due', updated_at = NOW()
+              WHERE stripe_customer_id = ${customerId}
+            `;
+          }
+          console.log(`Payment failed for customer ${customerId}`);
+        }
+        break;
+      }
 
-        if (user) {
-          console.log(`Payment failed for user ${user.id} (${user.email})`);
+      case 'invoice.paid': {
+        if (customerId) {
+          const expiresAt = subscription.lines?.data?.[0]?.period?.end
+            ? new Date(subscription.lines.data[0].period.end * 1000).toISOString()
+            : undefined;
+
+          const queued = await queueStripeWebhook(
+            {
+              type: event.type,
+              customerId,
+              currentPeriodEnd: expiresAt,
+            },
+            event.id
+          );
+
+          if (!queued) {
+            await sql`
+              UPDATE users 
+              SET 
+                subscription_status = 'active',
+                subscription_expires_at = ${expiresAt ? new Date(expiresAt) : null},
+                updated_at = NOW()
+              WHERE stripe_customer_id = ${customerId}
+            `;
+          }
+          console.log(`Invoice paid for customer ${customerId}`);
         }
         break;
       }

@@ -1,10 +1,17 @@
 import { Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { v7 as uuidv7 } from 'uuid';
+import { randomBytes } from 'crypto';
 import * as auth from '../lib/auth';
 import { sql } from '../lib/db';
+import { sendTeamInviteEmail, isEmailConfigured } from '../lib/email';
 
 const teamRoutes = new Hono();
+
+const INVITE_TOKEN_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}-[a-f0-9]{32}$/i;
+const MAX_INVITES_PER_HOUR = 20;
+const inviteRateLimits = new Map<string, { count: number; resetAt: number }>();
 
 function generateSlug(name: string): string {
   return name
@@ -15,7 +22,35 @@ function generateSlug(name: string): string {
 }
 
 function generateInviteToken(): string {
-  return uuidv7() + '-' + Math.random().toString(36).substring(2, 15);
+  return uuidv7() + '-' + randomBytes(16).toString('hex');
+}
+
+function checkInviteRateLimit(userId: string): boolean {
+  const now = Date.now();
+  const limit = inviteRateLimits.get(userId);
+
+  if (!limit || now > limit.resetAt) {
+    inviteRateLimits.set(userId, { count: 1, resetAt: now + 3600000 });
+    return true;
+  }
+
+  if (limit.count >= MAX_INVITES_PER_HOUR) {
+    return false;
+  }
+
+  limit.count++;
+  return true;
+}
+
+function isValidInviteToken(token: string): boolean {
+  return INVITE_TOKEN_REGEX.test(token);
+}
+
+function maskEmail(email: string): string {
+  const [local, domain] = email.split('@');
+  if (!domain) return '***@***';
+  const maskedLocal = local.length > 2 ? local[0] + '***' + local[local.length - 1] : '***';
+  return `${maskedLocal}@${domain}`;
 }
 
 teamRoutes.get('/', async (c) => {
@@ -201,17 +236,32 @@ teamRoutes.post('/:id/invite', async (c) => {
       return c.json({ error: 'Permission denied' }, 403);
     }
 
+    if (!checkInviteRateLimit(user.id)) {
+      return c.json({ error: 'Too many invites. Please try again later.' }, 429);
+    }
+
     const { email, role = 'member' } = await c.req.json();
 
     if (!email?.trim()) {
       return c.json({ error: 'Email is required' }, 400);
     }
 
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      return c.json({ error: 'Invalid email format' }, 400);
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+
+    if (normalizedEmail === user.email.toLowerCase()) {
+      return c.json({ error: 'You cannot invite yourself' }, 400);
+    }
+
     if (!['admin', 'member'].includes(role)) {
       return c.json({ error: 'Invalid role' }, 400);
     }
 
-    const [existingUser] = await sql`SELECT id FROM users WHERE email = ${email}`;
+    const [existingUser] = await sql`SELECT id FROM users WHERE LOWER(email) = ${normalizedEmail}`;
     if (existingUser) {
       const [existingMember] = await sql`
         SELECT id FROM team_members WHERE team_id = ${teamId} AND user_id = ${existingUser.id}
@@ -222,7 +272,7 @@ teamRoutes.post('/:id/invite', async (c) => {
     }
 
     const [existingInvite] = await sql`
-      SELECT id FROM team_invites WHERE team_id = ${teamId} AND email = ${email}
+      SELECT id FROM team_invites WHERE team_id = ${teamId} AND LOWER(email) = ${normalizedEmail}
     `;
     if (existingInvite) {
       await sql`DELETE FROM team_invites WHERE id = ${existingInvite.id}`;
@@ -233,12 +283,31 @@ teamRoutes.post('/:id/invite', async (c) => {
 
     await sql`
       INSERT INTO team_invites (team_id, email, role, token, invited_by, expires_at)
-      VALUES (${teamId}, ${email}, ${role}, ${token}, ${user.id}, ${expiresAt})
+      VALUES (${teamId}, ${normalizedEmail}, ${role}, ${token}, ${user.id}, ${expiresAt})
     `;
 
+    const [team] = await sql`SELECT name FROM teams WHERE id = ${teamId}`;
+    if (!team) {
+      return c.json({ error: 'Team not found' }, 404);
+    }
+
+    const inviteLink = `/teams/join/${token}`;
+
+    let emailSent = false;
+    if (isEmailConfigured()) {
+      emailSent = await sendTeamInviteEmail({
+        to: normalizedEmail,
+        teamName: team.name,
+        inviterName: user.name || user.email,
+        inviteLink,
+        role,
+      });
+    }
+
     return c.json({
-      message: 'Invite sent',
-      inviteLink: `/teams/join/${token}`,
+      message: emailSent ? 'Invite sent via email' : 'Invite created (share link manually)',
+      inviteLink,
+      emailSent,
     });
   } catch (error) {
     console.error('Error creating invite:', error);
@@ -255,6 +324,10 @@ teamRoutes.post('/join/:token', async (c) => {
 
   const token = c.req.param('token');
 
+  if (!isValidInviteToken(token)) {
+    return c.json({ error: 'Invalid invite token format' }, 400);
+  }
+
   try {
     const [invite] = await sql`
       SELECT * FROM team_invites 
@@ -265,7 +338,10 @@ teamRoutes.post('/join/:token', async (c) => {
       return c.json({ error: 'Invalid or expired invite' }, 400);
     }
 
-    if (invite.email !== user.email) {
+    if (invite.email.toLowerCase() !== user.email.toLowerCase()) {
+      console.warn(
+        `[Security] Invite token mismatch: expected ${maskEmail(invite.email)}, got ${maskEmail(user.email)}`
+      );
       return c.json({ error: 'This invite is for a different email address' }, 403);
     }
 
