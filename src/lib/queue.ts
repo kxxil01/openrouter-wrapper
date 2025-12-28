@@ -3,10 +3,13 @@ import Redis from 'ioredis';
 import { isRedisAvailable } from './redis';
 import { sql } from './db';
 import { config } from './config';
+import { v7 as uuidv7 } from 'uuid';
 
-const QUEUE_NAME = 'webhooks';
+const QUEUE_NAME = 'stripe-webhooks';
+const DEAD_LETTER_QUEUE = 'stripe-webhooks-dlq';
 
 let webhookQueue: Queue | null = null;
+let deadLetterQueue: Queue | null = null;
 let webhookWorker: Worker | null = null;
 
 function createBullMQConnection(): Redis {
@@ -26,13 +29,13 @@ export function getWebhookQueue(): Queue | null {
     webhookQueue = new Queue(QUEUE_NAME, {
       connection: createBullMQConnection(),
       defaultJobOptions: {
-        attempts: 5,
+        attempts: 10,
         backoff: {
           type: 'exponential',
-          delay: 1000,
+          delay: 2000,
         },
-        removeOnComplete: 100,
-        removeOnFail: 500,
+        removeOnComplete: 1000,
+        removeOnFail: false,
       },
     });
   }
@@ -47,24 +50,87 @@ export interface StripeWebhookPayload {
   currentPeriodEnd?: string;
   cancelAtPeriodEnd?: boolean;
   priceId?: string;
+  eventId?: string;
+  idempotencyKey?: string;
+  receivedAt?: string;
 }
 
-export async function queueStripeWebhook(payload: StripeWebhookPayload): Promise<boolean> {
+export async function queueStripeWebhook(
+  payload: StripeWebhookPayload,
+  stripeEventId?: string
+): Promise<boolean> {
   const queue = getWebhookQueue();
   if (!queue) {
     return false;
   }
 
-  await queue.add('stripe-webhook', payload, {
-    jobId: `stripe-${payload.type}-${payload.customerId}-${Date.now()}`,
+  const idempotencyKey = stripeEventId || `${payload.type}-${payload.customerId}-${Date.now()}`;
+  const enrichedPayload: StripeWebhookPayload = {
+    ...payload,
+    eventId: stripeEventId,
+    idempotencyKey,
+    receivedAt: new Date().toISOString(),
+  };
+
+  await queue.add('stripe-webhook', enrichedPayload, {
+    jobId: idempotencyKey,
   });
+
+  await logWebhookEvent(enrichedPayload, 'queued');
   return true;
+}
+
+async function logWebhookEvent(
+  payload: StripeWebhookPayload,
+  status: 'queued' | 'processing' | 'completed' | 'failed' | 'dead_letter'
+): Promise<void> {
+  try {
+    await sql`
+      INSERT INTO webhook_events (id, event_type, customer_id, payload, status, created_at)
+      VALUES (
+        ${uuidv7()},
+        ${payload.type},
+        ${payload.customerId},
+        ${JSON.stringify(payload)},
+        ${status},
+        NOW()
+      )
+      ON CONFLICT (id) DO UPDATE SET status = ${status}, updated_at = NOW()
+    `;
+  } catch (err) {
+    console.error('[Queue] Failed to log webhook event:', err);
+  }
+}
+
+async function moveToDeadLetterQueue(job: Job<StripeWebhookPayload>): Promise<void> {
+  if (!isRedisAvailable()) return;
+
+  if (!deadLetterQueue) {
+    deadLetterQueue = new Queue(DEAD_LETTER_QUEUE, {
+      connection: createBullMQConnection(),
+    });
+  }
+
+  await deadLetterQueue.add('failed-webhook', {
+    ...job.data,
+    originalJobId: job.id,
+    failedAt: new Date().toISOString(),
+    attemptsMade: job.attemptsMade,
+  });
+
+  await logWebhookEvent(job.data, 'dead_letter');
+  console.error(
+    `[Queue] CRITICAL: Billing webhook moved to DLQ - Type: ${job.data.type}, Customer: ${job.data.customerId}`
+  );
 }
 
 async function processStripeWebhook(job: Job<StripeWebhookPayload>): Promise<void> {
   const { type, customerId, subscriptionId, status, currentPeriodEnd } = job.data;
 
-  console.log(`[Queue] Processing ${type} for customer ${customerId}`);
+  await logWebhookEvent(job.data, 'processing');
+  console.log(
+    `[Queue] Processing ${type} for customer ${customerId} (attempt ${job.attemptsMade + 1}/${job.opts.attempts})`
+  );
 
   switch (type) {
     case 'checkout.session.completed':
@@ -129,6 +195,7 @@ async function processStripeWebhook(job: Job<StripeWebhookPayload>): Promise<voi
       console.log(`[Queue] Unhandled webhook type: ${type}`);
   }
 
+  await logWebhookEvent(job.data, 'completed');
   console.log(`[Queue] Completed ${type} for customer ${customerId}`);
 }
 
@@ -146,11 +213,23 @@ export function initWebhookWorker(): void {
   });
 
   webhookWorker.on('completed', (job) => {
-    console.log(`[Queue] Job ${job.id} completed`);
+    console.log(`[Queue] Job ${job.id} completed successfully`);
   });
 
-  webhookWorker.on('failed', (job, err) => {
-    console.error(`[Queue] Job ${job?.id} failed:`, err.message);
+  webhookWorker.on('failed', async (job, err) => {
+    if (!job) return;
+
+    const isLastAttempt = job.attemptsMade >= (job.opts.attempts || 10);
+    console.error(
+      `[Queue] Job ${job.id} failed (attempt ${job.attemptsMade}/${job.opts.attempts}):`,
+      err.message
+    );
+
+    if (isLastAttempt) {
+      await moveToDeadLetterQueue(job);
+    } else {
+      await logWebhookEvent(job.data, 'failed');
+    }
   });
 
   console.log('[Queue] Webhook worker started');

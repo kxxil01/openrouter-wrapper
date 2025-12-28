@@ -255,12 +255,15 @@ billingRoutes.post('/webhook', async (c) => {
         const subscriptionScope = session.metadata?.subscription_scope || 'individual';
 
         if (userId && session.subscription) {
-          const queued = await queueStripeWebhook({
-            type: event.type,
-            customerId: session.customer as string,
-            subscriptionId: session.subscription as string,
-            status: 'active',
-          });
+          const queued = await queueStripeWebhook(
+            {
+              type: event.type,
+              customerId: session.customer as string,
+              subscriptionId: session.subscription as string,
+              status: 'active',
+            },
+            event.id
+          );
 
           if (!queued) {
             await sql`
@@ -285,12 +288,15 @@ billingRoutes.post('/webhook', async (c) => {
             ? new Date(subscription.current_period_end * 1000).toISOString()
             : undefined;
 
-          const queued = await queueStripeWebhook({
-            type: event.type,
-            customerId,
-            status: subscription.status === 'active' ? 'active' : 'cancelled',
-            currentPeriodEnd: expiresAt,
-          });
+          const queued = await queueStripeWebhook(
+            {
+              type: event.type,
+              customerId,
+              status: subscription.status === 'active' ? 'active' : 'cancelled',
+              currentPeriodEnd: expiresAt,
+            },
+            event.id
+          );
 
           if (!queued) {
             const status = subscription.status === 'active' ? 'active' : 'cancelled';
@@ -310,10 +316,13 @@ billingRoutes.post('/webhook', async (c) => {
 
       case 'customer.subscription.deleted': {
         if (customerId) {
-          const queued = await queueStripeWebhook({
-            type: event.type,
-            customerId,
-          });
+          const queued = await queueStripeWebhook(
+            {
+              type: event.type,
+              customerId,
+            },
+            event.id
+          );
 
           if (!queued) {
             await sql`
@@ -334,10 +343,13 @@ billingRoutes.post('/webhook', async (c) => {
 
       case 'invoice.payment_failed': {
         if (customerId) {
-          const queued = await queueStripeWebhook({
-            type: event.type,
-            customerId,
-          });
+          const queued = await queueStripeWebhook(
+            {
+              type: event.type,
+              customerId,
+            },
+            event.id
+          );
 
           if (!queued) {
             await sql`
@@ -357,11 +369,14 @@ billingRoutes.post('/webhook', async (c) => {
             ? new Date(subscription.lines.data[0].period.end * 1000).toISOString()
             : undefined;
 
-          const queued = await queueStripeWebhook({
-            type: event.type,
-            customerId,
-            currentPeriodEnd: expiresAt,
-          });
+          const queued = await queueStripeWebhook(
+            {
+              type: event.type,
+              customerId,
+              currentPeriodEnd: expiresAt,
+            },
+            event.id
+          );
 
           if (!queued) {
             await sql`
