@@ -4,16 +4,29 @@ AI chat interface using OpenRouter API - built with **Bun + Hono + React**.
 
 ## Features
 
-- � **Google OAuth**: Secure authentication with session management
-- 💬 **Streaming**: Real-time SSE streaming responses
-- 📝 **Markdown**: Full markdown with syntax highlighting + KaTeX math
-- � **Search**: Full-text search across conversations (Cmd+K)
-- ✏️ **Edit & Regenerate**: Edit messages and regenerate responses
-- 📤 **Export**: Download conversations as Markdown/JSON
-- 💾 **Persistent**: PostgreSQL with UUIDv7 for time-ordered IDs
-- 🎨 **Dark Mode**: Modern ChatGPT-like interface
-- ⌨️ **Keyboard Shortcuts**: Cmd+K search, Cmd+/ sidebar, Cmd+Shift+N new chat
-- 💰 **Paywall**: Free tier with 5 messages/day limit
+### Core
+- **Google OAuth** - Secure authentication with Redis-backed sessions
+- **Streaming** - Real-time SSE streaming responses
+- **Markdown** - Full markdown with syntax highlighting + KaTeX math
+- **Search** - Full-text search across conversations (Cmd+K)
+- **Edit & Regenerate** - Edit messages and regenerate responses
+- **Export** - Download conversations as Markdown/JSON
+- **Keyboard Shortcuts** - Cmd+K search, Cmd+/ sidebar, Cmd+Shift+N new chat
+
+### Collaboration
+- **Team Workspaces** - Shared conversations within organizations
+- **Admin Dashboard** - User management, bulk actions, activity analytics
+- **Role-based Access** - User, Admin, Superadmin permissions
+
+### Monetization
+- **Stripe Billing** - Subscription checkout and management
+- **Free Tier** - 5 messages/day with paywall
+- **Usage Analytics** - Token usage and cost tracking
+
+### Infrastructure
+- **PostgreSQL** - UUIDv7 for time-ordered IDs, 21 migrations
+- **Redis** - Session management, rate limiting, caching
+- **BullMQ** - Background job processing for webhooks
 
 ## Quick Start
 
@@ -41,32 +54,29 @@ Open <http://localhost:3001>
 
 ```text
 src/
-├── server.ts              # Main Hono server (route mounting)
+├── server.ts              # Main Hono server
 ├── migrate.ts             # Database migration runner
 ├── routes/                # API route modules
+│   ├── admin.ts           # Admin dashboard API
 │   ├── auth.ts            # Login, logout, OAuth callback
-│   ├── conversations.ts   # CRUD, export, messages
-│   ├── messages.ts        # Message operations
+│   ├── billing.ts         # Stripe billing routes
 │   ├── chat.ts            # Chat completions (streaming)
-│   ├── preferences.ts     # User preferences
-│   ├── search.ts          # Full-text search
-│   └── models.ts          # OpenRouter models
-├── migrations/            # Database migrations (001-009)
+│   ├── conversations.ts   # CRUD, export, messages
+│   ├── teams.ts           # Team management
+│   └── ...                # Other routes
+├── migrations/            # Database migrations (001-021)
+├── middleware/
+│   └── rateLimit.ts       # Rate limiting middleware
 ├── lib/
 │   ├── auth.ts            # Google OAuth utilities
 │   ├── db.ts              # PostgreSQL connection
+│   ├── redis.ts           # Redis client
+│   ├── queue.ts           # BullMQ job queue
+│   ├── stripe.ts          # Stripe client
+│   ├── email.ts           # Resend email service
 │   └── api/               # Frontend API client
 ├── components/            # React components
-│   ├── ChatInterface.jsx
-│   ├── MessageList.jsx
-│   ├── Sidebar.jsx
-│   ├── SearchModal.jsx
-│   └── ...
 ├── hooks/                 # Custom React hooks
-│   ├── useChat.js         # Chat logic
-│   ├── useAuth.js
-│   ├── useConversations.js
-│   └── ...
 ├── App.jsx
 └── main.jsx
 ```
@@ -88,10 +98,18 @@ src/
 # Required
 DATABASE_URL=postgresql://user:pass@host:5432/db
 OPENROUTER_API_KEY=your_openrouter_api_key
+REDIS_URL=redis://localhost:6379
 
-# Optional - Google OAuth (enables authentication)
+# Google OAuth
 GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
+
+# Stripe Billing
+STRIPE_SECRET_KEY=sk_test_xxx
+STRIPE_WEBHOOK_SECRET=whsec_xxx
+
+# Email (Resend)
+RESEND_API_KEY=re_xxx
 
 # Optional
 PORT=3001
@@ -132,6 +150,27 @@ DISABLE_PAYWALL=true
 - `GET /api/preferences` - Get user preferences
 - `PATCH /api/preferences` - Update preferences
 
+### Teams
+
+- `GET /api/teams` - List user teams
+- `POST /api/teams` - Create team
+- `POST /api/teams/:id/invite` - Invite member
+- `POST /api/teams/join/:token` - Join via invite
+
+### Admin (superadmin only)
+
+- `GET /api/admin/stats` - Dashboard statistics
+- `GET /api/admin/users` - List users (cursor pagination)
+- `POST /api/admin/users/bulk` - Bulk actions
+- `GET /api/admin/users/export` - Export users (CSV/JSON)
+- `GET /api/admin/activity` - Activity analytics
+
+### Billing
+
+- `POST /api/billing/checkout` - Create Stripe checkout
+- `POST /api/billing/portal` - Customer portal session
+- `GET /api/billing/subscription` - Get subscription status
+
 ## Tech Stack
 
 | Layer    | Technology                    |
@@ -140,7 +179,11 @@ DISABLE_PAYWALL=true
 | Backend  | Hono                          |
 | Frontend | React 18, Vite, TailwindCSS   |
 | Database | PostgreSQL                    |
+| Cache    | Redis                         |
+| Queue    | BullMQ                        |
 | Auth     | Google OAuth 2.0              |
+| Payments | Stripe                        |
+| Email    | Resend                        |
 | AI       | OpenRouter API                |
 
 ## License

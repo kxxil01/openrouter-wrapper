@@ -157,6 +157,13 @@ Complete subscription lifecycle handling with enterprise-grade reliability:
 - [x] **Activity Dashboard** - Real-time signups, conversations, hourly activity chart
 - [x] **Export Functionality** - Export users to CSV or JSON format
 - [x] **User Selection** - Multi-select with checkboxes for bulk operations
+- [x] **Security Hardening**:
+  - UUID validation for all IDs (cursor, user IDs, bulk actions)
+  - Self-protection (admin cannot delete/demote themselves)
+  - CSV injection protection with value sanitization
+  - PII masking in audit logs
+  - Search query length limits
+  - Audit logging for export operations
 
 ---
 
@@ -210,4 +217,4 @@ src/
 
 ---
 
-_Last updated: December 28, 2024_
+_Last updated: December 28, 2025_
