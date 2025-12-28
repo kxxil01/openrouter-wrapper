@@ -137,8 +137,8 @@ export default function PricingModal({ isOpen, onClose, user }) {
               }`}
             >
               <span
-                className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-transform ${
-                  interval === 'yearly' ? 'translate-x-8' : 'translate-x-1'
+                className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform ${
+                  interval === 'yearly' ? 'translate-x-7' : 'translate-x-0'
                 }`}
               />
             </button>
@@ -156,7 +156,7 @@ export default function PricingModal({ isOpen, onClose, user }) {
             {PLANS.map((plan) => (
               <div
                 key={plan.id}
-                className={`relative rounded-xl border p-6 ${
+                className={`relative rounded-xl border p-6 flex flex-col ${
                   plan.popular
                     ? 'border-green-500 bg-green-500/5'
                     : 'border-gpt-border bg-gpt-sidebar'
@@ -184,7 +184,7 @@ export default function PricingModal({ isOpen, onClose, user }) {
                   )}
                 </div>
 
-                <ul className="space-y-3 mb-6">
+                <ul className="space-y-3 mb-6 flex-1">
                   {plan.features.map((feature, idx) => (
                     <li key={idx} className="flex items-start gap-2 text-sm text-gpt-text">
                       <svg
